@@ -36,6 +36,7 @@
   html, body {
     width: 100%;
     height: 100%;
+    height: 100dvh;
     overflow: hidden;
     background: #04101d;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -170,9 +171,10 @@
     left: calc(14px + var(--safe-left));
     right: calc(14px + var(--safe-right));
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 10px;
+    gap: 8px 10px;
   }
 
   .telemetry-cluster {
@@ -648,7 +650,7 @@
 
   .preset-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 10px;
   }
 
@@ -734,10 +736,55 @@
   /* 响应式微调 */
   @media (max-width: 768px) {
     .desktop-hint { display: none; }
-    .telemetry-cluster { padding: 7px 12px; gap: 8px; }
     .hide-sm { display: none; }
-    .radar-box { top: calc(68px + var(--safe-top)); width: 92px; height: 92px; }
-    .hud-btn { height: 34px; padding: 0 9px; font-size: 11px; }
+    .top-bar {
+      top: calc(8px + var(--safe-top));
+      left: calc(8px + var(--safe-left));
+      right: calc(8px + var(--safe-right));
+      gap: 6px;
+    }
+    .telemetry-cluster {
+      padding: 6px 10px;
+      gap: 7px;
+      border-radius: 16px;
+      flex: 1 1 auto;
+      justify-content: space-between;
+    }
+    .speed-box { min-width: 60px; }
+    .speed-val { font-size: 22px; }
+    .nitro-wrap { min-width: 52px; flex: 1; max-width: 82px; }
+    .center-hud { flex: 0 0 auto; }
+    .compass-pill { padding: 5px 10px; font-size: 11px; gap: 6px; }
+    .top-actions {
+      width: 100%;
+      justify-content: flex-start;
+      gap: 5px;
+    }
+    .hud-btn {
+      height: 31px;
+      padding: 0 8px;
+      font-size: 11px;
+      border-radius: 11px;
+    }
+    .radar-box {
+      top: calc(132px + var(--safe-top));
+      right: calc(10px + var(--safe-right));
+      width: 76px;
+      height: 76px;
+    }
+    #toastFeed { top: calc(134px + var(--safe-top)); }
+    .touch-controls {
+      left: calc(10px + var(--safe-left));
+      right: calc(10px + var(--safe-right));
+      bottom: calc(14px + var(--safe-bottom));
+    }
+    .steer-pad { width: 116px; height: 116px; }
+    .steer-knob { width: 46px; height: 46px; }
+    .right-controls { gap: 8px; }
+    .action-stack { gap: 8px; }
+    .action-circle { width: 48px; height: 48px; font-size: 10px; }
+    .action-circle.nitro-btn { width: 58px; height: 58px; }
+    .throttle-housing { width: 54px; height: 150px; }
   }
 
   @media (min-width: 1025px) and (pointer: fine) {
@@ -745,10 +792,17 @@
     .throttle-housing { opacity: 0.78; }
   }
 
-  @media (max-height: 460px) {
-    .radar-box { width: 80px; height: 80px; }
-    .steer-pad { width: 120px; height: 120px; }
-    .throttle-housing { height: 146px; }
+  @media (max-height: 480px) and (orientation: landscape) {
+    .top-actions { width: auto; flex: 1 1 auto; justify-content: flex-end; }
+    .telemetry-cluster { flex: 0 0 auto; }
+    .radar-box {
+      top: calc(86px + var(--safe-top));
+      right: calc(10px + var(--safe-right));
+      width: 68px;
+      height: 68px;
+    }
+    .steer-pad { width: 110px; height: 110px; }
+    .throttle-housing { width: 52px; height: 136px; }
   }
 </style>
 </head>
@@ -785,11 +839,11 @@
       </div>
       <div class="stat-mini hide-sm">
         <span class="stat-label">浪高</span>
-        <span class="stat-value" id="uiWave">1.2m</span>
+        <span class="stat-value" id="uiWave">0.1m</span>
       </div>
       <div class="divider-v"></div>
       <div class="nitro-wrap">
-        <span class="stat-label">TURBO</span>
+        <span class="stat-label" id="uiNitroLabel">TURBO ∞</span>
         <div class="nitro-track"><div class="nitro-fill" id="uiNitro"></div></div>
       </div>
     </div>
@@ -809,7 +863,8 @@
     <div class="top-actions">
       <button class="hud-btn" id="btnGyro" title="开启/校准陀螺仪">🧭 陀螺仪</button>
       <button class="hud-btn" id="btnCamera" title="切换视角 (C)">🎥 追尾</button>
-      <button class="hud-btn" id="btnWeather" title="切换海况 (V)">☀️ 热带</button>
+      <button class="hud-btn" id="btnWeather" title="切换海况 (V)">🪞 镜面</button>
+      <button class="hud-btn active" id="btnGodNitro" title="无限无敌氮气模式 (G)">∞ 无敌氮气</button>
       <button class="hud-btn" id="btnChase" title="切换AI追逐激进度">⚡ 激战AI</button>
       <button class="hud-btn" id="btnAudio" title="静音/开启音效">🔊</button>
     </div>
@@ -851,7 +906,7 @@
 
   <!-- 电脑键鼠操作提示 -->
   <div class="desktop-hint glass">
-    WASD / 方向键 操控 · SPACE 氮气加速 · C 视角 · V 海况 · H 汽笛 · 鼠标拖拽环视
+    WASD / 方向键 操控 · SPACE 无限氮气飙速 · G 切换无敌氮气 · C 视角 · V 海况 · H 汽笛 · 鼠标拖拽环视
   </div>
 </div>
 
@@ -865,14 +920,18 @@
     </p>
     <div class="preset-grid" id="weatherPicker">
       <div class="preset-card selected" data-preset="0">
+        <span class="preset-name">🪞 镜面丝滑</span>
+        <span class="preset-desc">风平浪静 · 滑雪般极速压弯</span>
+      </div>
+      <div class="preset-card" data-preset="1">
         <span class="preset-name">☀️ 热带碧海</span>
         <span class="preset-desc">清澈翡翠浪 · 1.2m 涌</span>
       </div>
-      <div class="preset-card" data-preset="1">
+      <div class="preset-card" data-preset="2">
         <span class="preset-name">🌅 黄金落日</span>
         <span class="preset-desc">碎金余晖 · 1.9m 涌</span>
       </div>
-      <div class="preset-card" data-preset="2">
+      <div class="preset-card" data-preset="3">
         <span class="preset-name">⛈️ 狂风怒涛</span>
         <span class="preset-desc">极限飞跃 · 3.4m 巨浪</span>
       </div>
@@ -901,6 +960,32 @@
   const WEATHER_PRESETS = [
     {
       id: 0,
+      isCalm: true,
+      name: '🪞 镜面',
+      label: '镜面丝滑（滑雪竞速平面）',
+      sunDir: [0.42, 0.56, -0.71],
+      sunColor: [1.0, 0.97, 0.92],
+      skyTop: [0.05, 0.36, 0.78],
+      skyHorizon: [0.64, 0.88, 0.98],
+      deepColor: [0.006, 0.13, 0.28],
+      shallowColor: [0.03, 0.48, 0.62],
+      sssColor: [0.08, 0.78, 0.76],
+      fogColor: [0.64, 0.86, 0.96],
+      fogDensity: 0.00038,
+      windSpeed: 2.2,
+      waveScale: 0.08,
+      waves: [
+        [ 0.88,  0.47, 0.012, 72.0],
+        [ 0.42, -0.91, 0.010, 44.0],
+        [-0.74,  0.67, 0.009, 26.0],
+        [ 0.96, -0.28, 0.008, 15.0],
+        [-0.31, -0.95, 0.006,  8.6],
+        [ 0.63,  0.77, 0.005,  5.0]
+      ]
+    },
+    {
+      id: 1,
+      isCalm: false,
       name: '☀️ 热带',
       label: '热带碧海',
       sunDir: [0.48, 0.62, -0.62],
@@ -924,7 +1009,8 @@
       ]
     },
     {
-      id: 1,
+      id: 2,
+      isCalm: false,
       name: '🌅 落日',
       label: '黄金落日',
       sunDir: [0.18, 0.19, -0.96],
@@ -948,7 +1034,8 @@
       ]
     },
     {
-      id: 2,
+      id: 3,
+      isCalm: false,
       name: '⛈️ 巨浪',
       label: '狂风怒涛',
       sunDir: [-0.35, 0.38, -0.85],
@@ -2259,7 +2346,7 @@ void main() {
     update(speedMs, throttleAbs, nitroActive, airborne, windSpeed) {
       if (!this.ready || !this.ctx || !this.enabled) return;
       const now = this.ctx.currentTime;
-      const spdNorm = Math3D.clamp(speedMs / 34, 0, 1.35);
+      const spdNorm = Math3D.clamp(speedMs / 82, 0, 1.5);
       const load = Math3D.clamp(throttleAbs * 0.65 + spdNorm * 0.55 + (nitroActive ? 0.35 : 0), 0, 1.4);
 
       const baseFreq = 36 + load * 78 + (airborne ? 18 : 0);
@@ -2733,7 +2820,7 @@ void main() {
       this.aiTimer = 1 + Math.random() * 4;
       this.aiSpeedFactor = 0.72 + Math.random() * 0.28;
 
-      this.wake = new WakeRibbon(this.isPlayer ? 52 : 28);
+      this.wake = new WakeRibbon(this.isPlayer ? 76 : 34);
       this.modelMat = Math3D.mat4Create();
     }
 
@@ -2784,22 +2871,27 @@ void main() {
       const hRight = (hMidR + hSternR) * 0.5;
       const waterCenter = hBow * 0.28 + hMidL * 0.18 + hMidR * 0.18 + hSternL * 0.18 + hSternR * 0.18;
 
-      // 2) 氮气与推力计算
-      const canNitro = this.nitroActive && this.nitro > 1.5 && this.throttle > 0.15;
-      if (canNitro) {
-        this.nitro = Math.max(0, this.nitro - 24 * dt);
+      const isCalm = !!WEATHER_PRESETS[OceanState.targetPreset].isCalm;
+      const godActive = this.isPlayer && GameState.godNitro;
+
+      // 2) 氮气与无限无敌版超级涡轮计算
+      const canNitro = this.nitroActive && (godActive || (this.nitro > 1.5 && this.throttle > 0.1));
+      if (godActive) {
+        this.nitro = 100;
+      } else if (canNitro) {
+        this.nitro = Math.max(0, this.nitro - 20 * dt);
       } else {
         this.nitroActive = false;
-        this.nitro = Math.min(100, this.nitro + (7.5 + (this.speed > 12 ? 3.5 : 0)) * dt);
+        this.nitro = Math.min(100, this.nitro + (10.5 + (this.speed > 18 ? 5.5 : 0)) * dt);
       }
 
       const fwdSpeed = this.vx * fwdX + this.vz * fwdZ;
       const latSpeed = this.vx * portX + this.vz * portZ;
       this.forwardSpeed = fwdSpeed;
 
-      // 吃水深度（>0 表示浸在水中，<0 表示腾空离水）
+      // 吃水深度（镜面模式下始终丝滑贴水，大浪模式下支持冲浪腾空）
       const submerge = (waterCenter + 0.12) - this.y;
-      const inWater = submerge > -0.35;
+      const inWater = isCalm ? true : (submerge > -0.35);
       const wasAirborne = this.airborne;
       this.airborne = !inWater;
 
@@ -2823,37 +2915,40 @@ void main() {
         this.airTime = 0;
       }
 
-      // 3) 垂直浮力 + 滑行升力 + 重力
+      // 3) 垂直浮力 + 滑雪式平滑滑行升力 + 重力
       if (inWater) {
         const subClamped = Math3D.clamp(submerge + 0.35, 0, 2.6);
-        const planingLift = Math3D.clamp(Math.abs(fwdSpeed) / 26, 0, 1) * 0.38;
+        const planingLift = Math3D.clamp(Math.abs(fwdSpeed) / 48, 0, 1.15) * (isCalm ? 0.26 : 0.42);
         const targetY = waterCenter + planingLift;
-        const springF = (targetY - this.y) * 24.0;
-        const dampF = (vyBow * 0.35 - this.vy) * 5.2;
+        const springK = isCalm ? 34.0 : 24.0;
+        const dampK = isCalm ? 8.6 : 5.2;
+        const springF = (targetY - this.y) * springK;
+        const dampF = (vyBow * (isCalm ? 0.12 : 0.35) - this.vy) * dampK;
         this.vy += (springF + dampF) * dt;
-        // 高速冲上大浪峰时给予自然起跳垂向冲量
-        if (fwdSpeed > 15 && hBow > hStern + 0.55 && subClamped < 0.75) {
-          this.vy += Math.min(8.5, (hBow - hStern) * fwdSpeed * 0.16) * dt * 10;
+        // 非镜面高速冲上大浪峰时给予自然起跳垂向冲量
+        if (!isCalm && fwdSpeed > 22 && hBow > hStern + 0.52 && subClamped < 0.78) {
+          this.vy += Math.min(10.5, (hBow - hStern) * fwdSpeed * 0.14) * dt * 10;
         }
       } else {
         this.vy -= GRAVITY * 1.05 * dt;
       }
       this.y += this.vy * dt;
 
-      // 4) 推进力、流体阻力与高速漂移侧滑
-      const waterGrip = inWater ? 1.0 : 0.12;
-      const boostMul = canNitro ? 1.58 : 1.0;
-      const thrust = this.throttle * this.accel * boostMul * waterGrip;
+      // 4) 推进力、极速流体阻力与滑雪刻滑(Carving)侧滑手感
+      const waterGrip = inWater ? 1.0 : 0.18;
+      const boostMul = canNitro ? (godActive ? 2.45 : 1.75) : 1.0;
+      const effThrottle = (canNitro && godActive) ? Math.max(1.0, this.throttle) : this.throttle;
+      const thrust = effThrottle * this.accel * boostMul * waterGrip;
 
-      // 纵向速度更新 + 二次方水阻
+      // 纵向极速解算（低线性阻力 + 迅猛推背感）
       let nextFwd = fwdSpeed + thrust * dt;
-      const maxSpd = this.maxSpeed * (canNitro ? 1.38 : 1.0);
-      const dragCoeff = inWater ? (0.48 + Math.abs(nextFwd) / (maxSpd * 1.45)) : 0.08;
+      const maxSpd = this.maxSpeed * (canNitro ? (godActive ? 1.88 : 1.48) : 1.0);
+      const dragCoeff = inWater ? ((isCalm ? 0.12 : 0.18) + Math.abs(nextFwd) / (maxSpd * 2.15)) : 0.04;
       nextFwd *= Math.exp(-dragCoeff * dt);
-      nextFwd = Math3D.clamp(nextFwd, -maxSpd * 0.42, maxSpd * 1.15);
+      nextFwd = Math3D.clamp(nextFwd, -maxSpd * 0.35, maxSpd * 1.18);
 
-      // 横向龙骨抗侧滑阻尼（保留适度尾甩漂移手感）
-      const latDrag = inWater ? 3.4 : 0.25;
+      // 横向龙骨抗侧滑阻尼（镜面模式模拟滑雪刻滑 Carving 丝滑弧线漂移）
+      const latDrag = inWater ? (isCalm ? 2.55 : 3.45) : 0.25;
       const nextLat = latSpeed * Math.exp(-latDrag * dt);
 
       this.vx = fwdX * nextFwd + portX * nextLat;
@@ -2863,21 +2958,22 @@ void main() {
       this.speed = Math.hypot(this.vx, this.vz);
 
       // 5) 舵效转向（右舵 steer > 0 => yaw 减小，朝右舷 -X 转向）
-      const steerAuth = Math3D.clamp(Math.abs(fwdSpeed) / 7.5, 0.22, 1.0) * (fwdSpeed < -0.5 ? -0.75 : 1.0);
-      const targetYawRate = -this.steer * this.turnPower * steerAuth * (inWater ? 1.0 : 0.28);
-      this.yawRate = Math3D.lerp(this.yawRate, targetYawRate, Math.min(1, dt * 6.5));
+      const steerAuth = Math3D.clamp(Math.abs(fwdSpeed) / 9.0, 0.28, 1.0) * (fwdSpeed < -0.5 ? -0.75 : 1.0);
+      const carveBonus = isCalm ? 1.18 : 1.0;
+      const targetYawRate = -this.steer * this.turnPower * carveBonus * steerAuth * (inWater ? 1.0 : 0.32);
+      this.yawRate = Math3D.lerp(this.yawRate, targetYawRate, Math.min(1, dt * (isCalm ? 8.8 : 6.8)));
       this.yaw += this.yawRate * dt;
 
-      // 6) 纵倾 Pitch 与横摇 Roll 弹簧阻尼解算
+      // 6) 纵倾 Pitch 与横摇 Roll 弹簧阻尼解算（镜面模式深度滑雪压弯内倾）
       // 注意坐标约定：pitch < 0 船首抬起，roll > 0 左舷抬起/右舷压低（右转内倾）
       const wavePitch = -Math.atan2(hBow - hStern, hl * 1.9);
-      const planingPitch = -Math3D.clamp(fwdSpeed / 28, 0, 1.2) * (canNitro ? 0.16 : 0.11);
-      const airPitch = this.airborne ? Math3D.clamp(-this.vy * 0.045, -0.34, 0.34) : 0;
-      const targetPitch = this.airborne ? airPitch : Math3D.clamp(wavePitch * 0.82 + planingPitch, -0.45, 0.42);
+      const planingPitch = -Math3D.clamp(fwdSpeed / 58, 0, 1.25) * (canNitro ? 0.15 : 0.09);
+      const airPitch = this.airborne ? Math3D.clamp(-this.vy * 0.04, -0.34, 0.34) : 0;
+      const targetPitch = this.airborne ? airPitch : Math3D.clamp(wavePitch * (isCalm ? 0.35 : 0.82) + planingPitch, -0.45, 0.42);
 
       const waveRoll = Math.atan2(hLeft - hRight, hb * 2.0);
-      const bankRoll = this.steer * Math3D.clamp(fwdSpeed / 22, 0, 1.15) * 0.34;
-      const targetRoll = Math3D.clamp((this.airborne ? bankRoll * 0.7 : waveRoll * 0.78 + bankRoll), -0.58, 0.58);
+      const bankRoll = this.steer * Math3D.clamp(fwdSpeed / 36, 0, 1.25) * (isCalm ? 0.46 : 0.36);
+      const targetRoll = Math3D.clamp((this.airborne ? bankRoll * 0.7 : waveRoll * (isCalm ? 0.25 : 0.78) + bankRoll), -0.65, 0.65);
 
       const rotStiff = inWater ? 15.0 : 3.2;
       const rotDamp = inWater ? 4.4 : 1.6;
@@ -3043,18 +3139,21 @@ void main() {
             b.z += nz * pen;
             const vn = b.vx * nx + b.vz * nz;
             if (vn < 0) {
-              b.vx -= 1.65 * vn * nx;
-              b.vz -= 1.65 * vn * nz;
-              b.yawRate += (Math.random() - 0.5) * 2.2;
+              const bounce = (b.isPlayer && GameState.godNitro) ? 1.15 : 1.65;
+              b.vx -= bounce * vn * nx;
+              b.vz -= bounce * vn * nz;
+              if (!(b.isPlayer && GameState.godNitro)) {
+                b.yawRate += (Math.random() - 0.5) * 2.2;
+              }
               if (b.isPlayer && b.hitCooldown <= 0) {
-                b.hitCooldown = 0.5;
-                const imp = Math3D.clamp(Math.abs(vn) / 14, 0.35, 1.3);
+                b.hitCooldown = 0.45;
+                const imp = Math3D.clamp(Math.abs(vn) / 22, 0.35, 1.35);
                 SpraySystem.emitCollisionBurst(b.x - nx * 2.2, b.y + 0.4, b.z - nz * 2.2, imp);
                 SoundEngine.playCrash(imp);
-                CameraSystem.addShake(imp * 0.9);
+                CameraSystem.addShake(imp * (GameState.godNitro ? 0.35 : 0.9));
                 triggerImpactFlash();
-                if (navigator.vibrate) navigator.vibrate(90);
-                showToast('⚠️ 触礁擦碰！已自动弹离');
+                if (navigator.vibrate) navigator.vibrate(70);
+                showToast(GameState.godNitro ? '🛡️ 无敌护体滑离礁石！' : '⚠️ 触礁擦碰！已自动弹离');
               }
             }
           }
@@ -3074,19 +3173,19 @@ void main() {
     mesh: Meshes.yachtPlayer,
     tint: [1.0, 1.0, 1.0],
     scale: 1.05,
-    maxSpeed: 33.5,
-    accel: 18.5,
-    turnPower: 2.05
+    maxSpeed: 68.0,
+    accel: 46.0,
+    turnPower: 2.45
   });
 
   const AI_PROFILES = [
-    { name: '拦截快艇 · VIPER', role: 'chaser', mesh: Meshes.yachtRacer, tint: [1.0, 0.45, 0.45], scale: 0.95, maxSpeed: 30.5, accel: 16.5 },
-    { name: '拦截快艇 · SHARK', role: 'chaser', mesh: Meshes.yachtRacer, tint: [1.0, 0.72, 0.25], scale: 0.98, maxSpeed: 31.2, accel: 17.0 },
-    { name: '竞速艇 · PHANTOM', role: 'racer',  mesh: Meshes.yachtRacer, tint: [0.45, 1.0, 0.85], scale: 0.92, maxSpeed: 32.0, accel: 17.5 },
-    { name: '竞速艇 · NEON',    role: 'racer',  mesh: Meshes.yachtPlayer, tint: [0.78, 0.62, 1.0], scale: 1.00, maxSpeed: 29.0, accel: 15.5 },
-    { name: '豪华巡航 · ROYAL', role: 'cruiser', mesh: Meshes.yachtSuper, tint: [0.95, 0.95, 1.0], scale: 1.18, maxSpeed: 21.5, accel: 10.5 },
-    { name: '超级游艇 · TITAN', role: 'cruiser', mesh: Meshes.yachtSuper, tint: [0.75, 0.88, 1.0], scale: 1.26, maxSpeed: 19.5, accel: 9.5 },
-    { name: '海上猎手 · APEX',  role: 'chaser', mesh: Meshes.yachtPlayer, tint: [1.0, 0.38, 0.65], scale: 1.02, maxSpeed: 31.8, accel: 17.2 }
+    { name: '拦截快艇 · VIPER', role: 'chaser', mesh: Meshes.yachtRacer, tint: [1.0, 0.45, 0.45], scale: 0.95, maxSpeed: 58.0, accel: 34.0 },
+    { name: '拦截快艇 · SHARK', role: 'chaser', mesh: Meshes.yachtRacer, tint: [1.0, 0.72, 0.25], scale: 0.98, maxSpeed: 60.0, accel: 36.0 },
+    { name: '竞速艇 · PHANTOM', role: 'racer',  mesh: Meshes.yachtRacer, tint: [0.45, 1.0, 0.85], scale: 0.92, maxSpeed: 63.0, accel: 38.0 },
+    { name: '竞速艇 · NEON',    role: 'racer',  mesh: Meshes.yachtPlayer, tint: [0.78, 0.62, 1.0], scale: 1.00, maxSpeed: 56.0, accel: 32.0 },
+    { name: '豪华巡航 · ROYAL', role: 'cruiser', mesh: Meshes.yachtSuper, tint: [0.95, 0.95, 1.0], scale: 1.18, maxSpeed: 36.0, accel: 18.0 },
+    { name: '超级游艇 · TITAN', role: 'cruiser', mesh: Meshes.yachtSuper, tint: [0.75, 0.88, 1.0], scale: 1.26, maxSpeed: 32.0, accel: 16.0 },
+    { name: '海上猎手 · APEX',  role: 'chaser', mesh: Meshes.yachtPlayer, tint: [1.0, 0.38, 0.65], scale: 1.02, maxSpeed: 62.0, accel: 37.0 }
   ];
 
   const allYachts = [player];
@@ -3121,6 +3220,7 @@ void main() {
     combo: 0,
     comboTimer: 0,
     aggressiveAI: true,
+    godNitro: true,
     cameraMode: 0, // 0:追尾, 1:驾驶舱, 2:电影环绕, 3:高空俯视
 
     addScore(pts, msg) {
@@ -3147,15 +3247,15 @@ void main() {
       const dz = player.z - ai.z;
       const dist = Math.hypot(dx, dz);
 
-      // 若 AI 游艇被甩开超过 520m，在玩家前方宽扇区无缝重生，保持无限海域永远热闹
-      if (dist > 520) {
-        const aheadYaw = player.yaw + (Math.random() - 0.5) * 1.45;
-        const spawnDist = 180 + Math.random() * 140;
+      // 若 AI 游艇被甩开超过 760m，在玩家前方宽扇区无缝重生，保持高速追逐永远热闹
+      if (dist > 760) {
+        const aheadYaw = player.yaw + (Math.random() - 0.5) * 1.35;
+        const spawnDist = 240 + Math.random() * 200;
         ai.x = player.x + Math.sin(aheadYaw) * spawnDist;
         ai.z = player.z + Math.cos(aheadYaw) * spawnDist;
-        ai.yaw = player.yaw + (Math.random() - 0.5) * 1.8;
-        ai.vx = Math.sin(ai.yaw) * 12;
-        ai.vz = Math.cos(ai.yaw) * 12;
+        ai.yaw = player.yaw + (Math.random() - 0.5) * 1.4;
+        ai.vx = Math.sin(ai.yaw) * 28;
+        ai.vz = Math.cos(ai.yaw) * 28;
         ai.wake.nodes.length = 0;
         ai.wake.inited = false;
         continue;
@@ -3231,8 +3331,10 @@ void main() {
           const nx = dx / dist;
           const nz = dz / dist;
           const overlap = minDist - dist;
-          const invMa = 1 / a.mass;
-          const invMb = 1 / b.mass;
+          const godA = a.isPlayer && GameState.godNitro;
+          const godB = b.isPlayer && GameState.godNitro;
+          const invMa = 1 / (godA ? a.mass * 14 : a.mass);
+          const invMb = 1 / (godB ? b.mass * 14 : b.mass);
           const invSum = invMa + invMb;
 
           // 位置分离
@@ -3241,13 +3343,13 @@ void main() {
           b.x += nx * overlap * (invMb / invSum);
           b.z += nz * overlap * (invMb / invSum);
 
-          // 相对速度冲量
+          // 相对速度冲量（无敌模式霸体碾压，将对方狠狠撞飞）
           const rvx = b.vx - a.vx;
           const rvz = b.vz - a.vz;
           const velAlongNormal = rvx * nx + rvz * nz;
 
           if (velAlongNormal < 0) {
-            const restitution = 0.72;
+            const restitution = (godA || godB) ? 1.25 : 0.72;
             const impulse = -(1 + restitution) * velAlongNormal / invSum;
             a.vx -= impulse * invMa * nx;
             a.vz -= impulse * invMa * nz;
@@ -3256,11 +3358,15 @@ void main() {
 
             // 撞击导致船体弹跳、横摇和甩尾旋转
             const impactSpd = Math.abs(velAlongNormal);
-            const spin = Math3D.clamp(impactSpd * 0.16, 0.4, 2.8);
-            a.yawRate += (Math.random() > 0.5 ? 1 : -1) * spin;
-            b.yawRate += (Math.random() > 0.5 ? -1 : 1) * spin * 1.25;
-            a.vy += Math.min(3.5, impactSpd * 0.14);
-            b.vy += Math.min(4.8, impactSpd * 0.22);
+            const spin = Math3D.clamp(impactSpd * 0.14, 0.4, 3.2);
+            if (!godA) {
+              a.yawRate += (Math.random() > 0.5 ? 1 : -1) * spin;
+              a.vy += Math.min(8.5, impactSpd * (godB ? 0.34 : 0.14));
+            }
+            if (!godB) {
+              b.yawRate += (Math.random() > 0.5 ? -1 : 1) * spin * (godA ? 1.85 : 1.25);
+              b.vy += Math.min(9.5, impactSpd * (godA ? 0.38 : 0.22));
+            }
 
             const hitX = (a.x + b.x) * 0.5;
             const hitY = Math.max(a.y, b.y) + 0.35;
@@ -3425,6 +3531,7 @@ void main() {
         if (!GameState.started) return;
         if (k === 'KeyC') cycleCamera();
         if (k === 'KeyV') cycleWeather();
+        if (k === 'KeyG') toggleGodNitro();
         if (k === 'KeyH') { SoundEngine.playHorn(); showToast('📯 游艇鸣笛'); }
         if (k === 'Space') e.preventDefault();
       });
@@ -3567,6 +3674,7 @@ void main() {
       document.getElementById('btnGyro').addEventListener('click', () => this.toggleGyro());
       document.getElementById('btnCamera').addEventListener('click', cycleCamera);
       document.getElementById('btnWeather').addEventListener('click', cycleWeather);
+      document.getElementById('btnGodNitro').addEventListener('click', toggleGodNitro);
       document.getElementById('btnChase').addEventListener('click', () => {
         GameState.aggressiveAI = !GameState.aggressiveAI;
         const b = document.getElementById('btnChase');
@@ -3640,6 +3748,9 @@ void main() {
       }
 
       player.nitroActive = !!(this.touchNitro || this.keys['Space']);
+      if (player.nitroActive && GameState.godNitro && player.throttle < 1.0) {
+        player.throttle = 1.0;
+      }
 
       // 未拖拽镜头时缓慢回正环视偏移
       if (!this.draggingCam && GameState.cameraMode !== 2) {
@@ -3680,9 +3791,9 @@ void main() {
       const fwdX = Math.sin(player.yaw);
       const fwdZ = Math.cos(player.yaw);
 
-      // 动态速度 FOV（高速/氮气带来强烈速度拉伸感）
-      const targetFov = (56 + Math3D.clamp(player.speed * 0.42, 0, 16) + (player.nitroActive ? 8 : 0)) * Math.PI / 180;
-      this.fov = Math3D.lerp(this.fov, targetFov, Math.min(1, dt * 4.5));
+      // 动态速度 FOV（超高速/无限氮气带来极致贴水速度拉伸感）
+      const targetFov = (56 + Math3D.clamp(player.speed * 0.28, 0, 26) + (player.nitroActive ? 11 : 0)) * Math.PI / 180;
+      this.fov = Math3D.lerp(this.fov, targetFov, Math.min(1, dt * 4.8));
 
       let desX, desY, desZ, lookX, lookY, lookZ;
       const mode = GameState.started ? GameState.cameraMode : 2;
@@ -3690,7 +3801,7 @@ void main() {
       if (mode === 0) {
         // 0: 动态拟真追尾视角
         const orbitYaw = player.yaw + Input.camOrbitYaw;
-        const dist = 14.5 + Math3D.clamp(player.speed * 0.14, 0, 4.5);
+        const dist = 14.0 + Math3D.clamp(player.speed * 0.10, 0, 7.5);
         const height = 4.6 + Input.camOrbitPitch * 8.5 + (player.airborne ? 1.2 : 0);
         desX = player.x - Math.sin(orbitYaw) * dist;
         desZ = player.z - Math.cos(orbitYaw) * dist;
@@ -3792,6 +3903,17 @@ void main() {
     OceanState.targetPreset = next;
     document.getElementById('btnWeather').textContent = WEATHER_PRESETS[next].name;
     showToast(`🌊 海况切换：${WEATHER_PRESETS[next].label}`);
+  }
+
+  function toggleGodNitro() {
+    GameState.godNitro = !GameState.godNitro;
+    const btn = document.getElementById('btnGodNitro');
+    const lbl = document.getElementById('uiNitroLabel');
+    btn.classList.toggle('active', GameState.godNitro);
+    btn.textContent = GameState.godNitro ? '∞ 无敌氮气' : '🔋 标准氮气';
+    if (lbl) lbl.textContent = GameState.godNitro ? 'TURBO ∞' : 'TURBO';
+    if (GameState.godNitro) player.nitro = 100;
+    showToast(GameState.godNitro ? '🔥 无限无敌氮气已开启 · 霸体撞飞+永不断气!' : '🔋 已切换为标准氮气消耗模式');
   }
 
   function showToast(text) {
@@ -3929,9 +4051,9 @@ void main() {
     document.body.classList.remove('menu-open');
     document.body.classList.add('playing');
     document.getElementById('startOverlay').classList.add('hidden');
-    // 启航瞬间给予平滑起步推力
-    player.throttle = 0.35;
-    showToast('⚓ 已离港进入无限海域 · 祝航行愉快!');
+    // 启航瞬间给予丝滑冲刺起步推力
+    player.throttle = 0.72;
+    showToast('🚀 无限无敌版已就绪 · 按住氮气/SPACE 极速狂飙!');
   });
 
   // 遥测仪表高频 DOM 缓存
