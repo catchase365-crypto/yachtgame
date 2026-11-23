@@ -1,0 +1,4130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>AZURE WAKE 3D — 无限海域游艇拟真驾驶</title>
+<style>
+  :root {
+    --glass-bg: rgba(12, 24, 38, 0.34);
+    --glass-bg-strong: rgba(10, 20, 34, 0.56);
+    --glass-border: rgba(255, 255, 255, 0.22);
+    --glass-highlight: rgba(255, 255, 255, 0.38);
+    --accent-cyan: #22d3ee;
+    --accent-emerald: #10b981;
+    --accent-amber: #f59e0b;
+    --accent-rose: #f43f5e;
+    --text-main: #f8fafc;
+    --text-sub: rgba(226, 232, 240, 0.78);
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #04101d;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: var(--text-main);
+    touch-action: none;
+  }
+
+  /* =========================================================
+     静态流体背景（5 色四角+中心，使用 max(vw, vh) 全端自适应）
+     ========================================================= */
+  #fluid-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 50%, #07192d 0%, #030a14 100%);
+  }
+
+  .fluid-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(max(6vw, 6vh));
+    opacity: 0.62;
+    will-change: transform;
+  }
+
+  /* 左上：翠绿 Emerald */
+  .orb-emerald {
+    width: max(56vw, 56vh);
+    height: max(56vw, 56vh);
+    top: calc(max(18vw, 18vh) * -1);
+    left: calc(max(16vw, 16vh) * -1);
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.9) 0%, rgba(16, 185, 129, 0) 72%);
+  }
+
+  /* 右上：紫罗兰 Violet */
+  .orb-violet {
+    width: max(58vw, 58vh);
+    height: max(58vw, 58vh);
+    top: calc(max(18vw, 18vh) * -1);
+    right: calc(max(16vw, 16vh) * -1);
+    background: radial-gradient(circle, rgba(139, 92, 246, 0.88) 0%, rgba(139, 92, 246, 0) 72%);
+  }
+
+  /* 左下：海蓝 Sea Blue */
+  .orb-seablue {
+    width: max(62vw, 62vh);
+    height: max(62vw, 62vh);
+    bottom: calc(max(20vw, 20vh) * -1);
+    left: calc(max(16vw, 16vh) * -1);
+    background: radial-gradient(circle, rgba(14, 165, 233, 0.92) 0%, rgba(14, 165, 233, 0) 72%);
+  }
+
+  /* 右下：洋红 Magenta */
+  .orb-magenta {
+    width: max(54vw, 54vh);
+    height: max(54vw, 54vh);
+    bottom: calc(max(18vw, 18vh) * -1);
+    right: calc(max(15vw, 15vh) * -1);
+    background: radial-gradient(circle, rgba(236, 72, 153, 0.85) 0%, rgba(236, 72, 153, 0) 72%);
+  }
+
+  /* 中心：橙黄 Orange-Yellow */
+  .orb-amber {
+    width: max(48vw, 48vh);
+    height: max(48vw, 48vh);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(245, 158, 11, 0.72) 0%, rgba(245, 158, 11, 0) 70%);
+  }
+
+  /* 主 3D WebGL2 画布 */
+  #glCanvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    display: block;
+    transition: opacity 0.65s ease;
+  }
+
+  body.menu-open #glCanvas {
+    opacity: 0.72;
+  }
+
+  /* =========================================================
+     液态磨砂玻璃通用面板 (Liquid Frosted Glass)
+     ========================================================= */
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(22px) saturate(165%);
+    -webkit-backdrop-filter: blur(22px) saturate(165%);
+    border: 1px solid var(--glass-border);
+    box-shadow:
+      0 10px 32px rgba(0, 0, 0, 0.28),
+      inset 0 1px 0 var(--glass-highlight);
+  }
+
+  .glass-strong {
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(28px) saturate(185%);
+    -webkit-backdrop-filter: blur(28px) saturate(185%);
+    border: 1px solid rgba(255, 255, 255, 0.26);
+    box-shadow:
+      0 18px 48px rgba(0, 0, 0, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  }
+
+  /* =========================================================
+     HUD 层级布局
+     ========================================================= */
+  #hud {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+
+  body.playing #hud {
+    opacity: 1;
+  }
+
+  /* 顶部遥测仪表栏 */
+  .top-bar {
+    position: absolute;
+    top: calc(12px + var(--safe-top));
+    left: calc(14px + var(--safe-left));
+    right: calc(14px + var(--safe-right));
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .telemetry-cluster {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 16px;
+    border-radius: 20px;
+    pointer-events: auto;
+  }
+
+  .speed-box {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    min-width: 82px;
+  }
+
+  .speed-val {
+    font-size: clamp(24px, 3.6vw, 34px);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    background: linear-gradient(180deg, #ffffff 15%, #67e8f9 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .speed-unit {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent-cyan);
+    letter-spacing: 0.08em;
+  }
+
+  .divider-v {
+    width: 1px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.18);
+  }
+
+  .stat-mini {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .stat-label {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-sub);
+  }
+
+  .stat-value {
+    font-size: 13px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 氮气条 */
+  .nitro-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 78px;
+  }
+
+  .nitro-track {
+    width: 100%;
+    height: 7px;
+    border-radius: 99px;
+    background: rgba(255, 255, 255, 0.14);
+    overflow: hidden;
+  }
+
+  .nitro-fill {
+    height: 100%;
+    width: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, #06b6d4, #22d3ee, #fde047);
+    box-shadow: 0 0 12px rgba(34, 211, 238, 0.75);
+    transition: width 0.08s linear;
+  }
+
+  /* 中央罗盘与积分 */
+  .center-hud {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .compass-pill {
+    padding: 6px 14px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .score-badge {
+    color: #fde047;
+  }
+
+  /* 右上角快捷控制按钮 */
+  .top-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 7px;
+    pointer-events: auto;
+  }
+
+  .hud-btn {
+    height: 38px;
+    padding: 0 12px;
+    border-radius: 14px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    color: var(--text-main);
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    cursor: pointer;
+    transition: transform 0.14s ease, background 0.2s ease, border-color 0.2s ease;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+
+  .hud-btn:active {
+    transform: scale(0.93);
+  }
+
+  .hud-btn.active {
+    background: rgba(34, 211, 238, 0.28);
+    border-color: rgba(34, 211, 238, 0.85);
+    box-shadow: 0 0 18px rgba(34, 211, 238, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  }
+
+  .hud-btn.warn {
+    background: rgba(244, 63, 94, 0.28);
+    border-color: rgba(244, 63, 94, 0.8);
+  }
+
+  /* 雷达小地图 */
+  .radar-box {
+    position: absolute;
+    top: calc(74px + var(--safe-top));
+    right: calc(14px + var(--safe-right));
+    width: clamp(96px, 14vw, 134px);
+    height: clamp(96px, 14vw, 134px);
+    border-radius: 50%;
+    padding: 5px;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #radarCanvas {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: block;
+  }
+
+  /* =========================================================
+     移动端/平板 拟真操控区（左方向舵 + 右油门推杆 + 动作键）
+     ========================================================= */
+  .touch-controls {
+    position: absolute;
+    left: calc(16px + var(--safe-left));
+    right: calc(16px + var(--safe-right));
+    bottom: calc(16px + var(--safe-bottom));
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    pointer-events: none;
+  }
+
+  /* 左侧方向操控盘 */
+  .steer-pad {
+    position: relative;
+    width: clamp(134px, 22vw, 168px);
+    height: clamp(134px, 22vw, 168px);
+    border-radius: 50%;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+  }
+
+  .steer-ring {
+    position: absolute;
+    inset: 12px;
+    border-radius: 50%;
+    border: 1.5px dashed rgba(255, 255, 255, 0.25);
+  }
+
+  .steer-labels {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 12px;
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
+    pointer-events: none;
+  }
+
+  .steer-knob {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 32% 30%, rgba(255, 255, 255, 0.85), rgba(34, 211, 238, 0.45) 55%, rgba(14, 116, 144, 0.65));
+    border: 2px solid rgba(255, 255, 255, 0.72);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4), 0 0 16px rgba(34, 211, 238, 0.4);
+    transform: translate3d(0, 0, 0);
+    transition: box-shadow 0.15s ease;
+    pointer-events: none;
+  }
+
+  .gyro-indicator {
+    position: absolute;
+    bottom: -24px;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent-cyan);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+
+  .gyro-indicator.visible {
+    opacity: 1;
+  }
+
+  /* 右侧操控集群（功能按钮 + 油门推杆） */
+  .right-controls {
+    display: flex;
+    align-items: flex-end;
+    gap: 14px;
+    pointer-events: auto;
+  }
+
+  .action-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .action-circle {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    background: var(--glass-bg);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    cursor: pointer;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    transition: transform 0.12s ease, background 0.15s ease;
+  }
+
+  .action-circle:active, .action-circle.firing {
+    transform: scale(0.91);
+  }
+
+  .action-circle.nitro-btn {
+    width: 68px;
+    height: 68px;
+    border-color: rgba(34, 211, 238, 0.75);
+    background: radial-gradient(circle at 35% 30%, rgba(34, 211, 238, 0.42), rgba(14, 116, 144, 0.45));
+    box-shadow: 0 0 24px rgba(34, 211, 238, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  }
+
+  .action-circle.nitro-btn.firing {
+    background: radial-gradient(circle at 50% 50%, rgba(253, 224, 71, 0.75), rgba(6, 182, 212, 0.8));
+    box-shadow: 0 0 32px rgba(253, 224, 71, 0.8);
+  }
+
+  /* 游艇油门推杆 */
+  .throttle-housing {
+    position: relative;
+    width: 64px;
+    height: clamp(162px, 27vh, 216px);
+    border-radius: 32px;
+    padding: 10px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    touch-action: none;
+  }
+
+  .throttle-track {
+    position: absolute;
+    top: 18px;
+    bottom: 18px;
+    width: 8px;
+    border-radius: 99px;
+    background: linear-gradient(180deg, #fde047 0%, #22d3ee 32%, rgba(255,255,255,0.22) 72%, #f43f5e 100%);
+    opacity: 0.65;
+    pointer-events: none;
+  }
+
+  .throttle-notch {
+    position: absolute;
+    top: 72%;
+    left: 12px;
+    right: 12px;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.5);
+    pointer-events: none;
+  }
+
+  .throttle-handle {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    height: 36px;
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(203, 213, 225, 0.78));
+    border: 1px solid #fff;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #0f172a;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    pointer-events: none;
+    top: 72%;
+    transform: translateY(-50%);
+  }
+
+  .throttle-tag {
+    font-size: 9px;
+    font-weight: 800;
+    color: rgba(255, 255, 255, 0.68);
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  /* 桌面快捷键提示 */
+  .desktop-hint {
+    position: absolute;
+    bottom: calc(16px + var(--safe-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 7px 16px;
+    border-radius: 99px;
+    font-size: 11px;
+    color: rgba(241, 245, 249, 0.85);
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  /* 屏幕中央碰撞/连击提示 */
+  #toastFeed {
+    position: absolute;
+    top: calc(92px + var(--safe-top));
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none;
+  }
+
+  .toast-item {
+    padding: 7px 16px;
+    border-radius: 99px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    animation: toastPop 2.1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @keyframes toastPop {
+    0% { opacity: 0; transform: translateY(14px) scale(0.9); }
+    14% { opacity: 1; transform: translateY(0) scale(1); }
+    80% { opacity: 1; transform: translateY(-4px) scale(1); }
+    100% { opacity: 0; transform: translateY(-16px) scale(0.95); }
+  }
+
+  /* =========================================================
+     启航菜单遮罩 (液态磨砂玻璃卡片)
+     ========================================================= */
+  #startOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: radial-gradient(circle at 50% 45%, rgba(4, 18, 34, 0.25), rgba(2, 8, 18, 0.62));
+    transition: opacity 0.45s ease, visibility 0.45s ease;
+  }
+
+  #startOverlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .start-card {
+    width: min(560px, 100%);
+    border-radius: 30px;
+    padding: clamp(22px, 4vw, 34px);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    text-align: center;
+  }
+
+  .brand-kicker {
+    display: inline-flex;
+    align-self: center;
+    padding: 5px 14px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    color: var(--accent-cyan);
+    background: rgba(34, 211, 238, 0.14);
+    border: 1px solid rgba(34, 211, 238, 0.36);
+  }
+
+  .brand-title {
+    font-size: clamp(28px, 5.5vw, 44px);
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    line-height: 1.08;
+    background: linear-gradient(135deg, #ffffff 10%, #a5f3fc 52%, #38bdf8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .brand-sub {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-sub);
+  }
+
+  .preset-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .preset-card {
+    padding: 12px 8px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .preset-card:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .preset-card.selected {
+    background: rgba(34, 211, 238, 0.22);
+    border-color: rgba(34, 211, 238, 0.85);
+    box-shadow: 0 0 22px rgba(34, 211, 238, 0.28);
+  }
+
+  .preset-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .preset-desc {
+    font-size: 11px;
+    color: var(--text-sub);
+  }
+
+  .start-cta {
+    width: 100%;
+    height: 54px;
+    border: none;
+    border-radius: 18px;
+    background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 52%, #10b981 100%);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    box-shadow: 0 12px 30px rgba(6, 182, 212, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    transition: transform 0.15s ease, filter 0.2s ease;
+  }
+
+  .start-cta:active {
+    transform: scale(0.97);
+  }
+
+  .feature-chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .chip {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 99px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: rgba(226, 232, 240, 0.88);
+  }
+
+  /* 屏幕冲击红/蓝暗角 */
+  #impactVignette {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(circle, rgba(34, 211, 238, 0) 45%, rgba(244, 63, 94, 0.52) 100%);
+    transition: opacity 0.12s ease-out;
+  }
+
+  /* 响应式微调 */
+  @media (max-width: 768px) {
+    .desktop-hint { display: none; }
+    .telemetry-cluster { padding: 7px 12px; gap: 8px; }
+    .hide-sm { display: none; }
+    .radar-box { top: calc(68px + var(--safe-top)); width: 92px; height: 92px; }
+    .hud-btn { height: 34px; padding: 0 9px; font-size: 11px; }
+  }
+
+  @media (min-width: 1025px) and (pointer: fine) {
+    .steer-pad { opacity: 0.72; }
+    .throttle-housing { opacity: 0.78; }
+  }
+
+  @media (max-height: 460px) {
+    .radar-box { width: 80px; height: 80px; }
+    .steer-pad { width: 120px; height: 120px; }
+    .throttle-housing { height: 146px; }
+  }
+</style>
+</head>
+<body class="menu-open">
+
+<!-- 静态流体背景：置顶于 body，四角+中心 5 色球体，max(vw, vh) 全端自适应 -->
+<div id="fluid-bg" aria-hidden="true">
+  <div class="fluid-orb orb-emerald"></div>
+  <div class="fluid-orb orb-violet"></div>
+  <div class="fluid-orb orb-seablue"></div>
+  <div class="fluid-orb orb-magenta"></div>
+  <div class="fluid-orb orb-amber"></div>
+</div>
+
+<!-- WebGL2 3D 主画布 -->
+<canvas id="glCanvas"></canvas>
+
+<!-- 撞击/过载视觉暗角 -->
+<div id="impactVignette"></div>
+
+<!-- 实时驾驶 HUD -->
+<div id="hud">
+  <div class="top-bar">
+    <!-- 左上：航速、转速、浪高、氮气 -->
+    <div class="telemetry-cluster glass">
+      <div class="speed-box">
+        <span class="speed-val" id="uiSpeed">0.0</span>
+        <span class="speed-unit">KTS</span>
+      </div>
+      <div class="divider-v"></div>
+      <div class="stat-mini">
+        <span class="stat-label">RPM</span>
+        <span class="stat-value" id="uiRpm">800</span>
+      </div>
+      <div class="stat-mini hide-sm">
+        <span class="stat-label">浪高</span>
+        <span class="stat-value" id="uiWave">1.2m</span>
+      </div>
+      <div class="divider-v"></div>
+      <div class="nitro-wrap">
+        <span class="stat-label">TURBO</span>
+        <div class="nitro-track"><div class="nitro-fill" id="uiNitro"></div></div>
+      </div>
+    </div>
+
+    <!-- 中央：航向与战绩 -->
+    <div class="center-hud">
+      <div class="compass-pill glass">
+        <span id="uiHeading">HDG 000° N</span>
+        <span>·</span>
+        <span class="score-badge" id="uiScore">SCORE 0</span>
+        <span class="hide-sm">·</span>
+        <span class="hide-sm" id="uiFps">60 FPS</span>
+      </div>
+    </div>
+
+    <!-- 右上：模式与传感器快捷开关 -->
+    <div class="top-actions">
+      <button class="hud-btn" id="btnGyro" title="开启/校准陀螺仪">🧭 陀螺仪</button>
+      <button class="hud-btn" id="btnCamera" title="切换视角 (C)">🎥 追尾</button>
+      <button class="hud-btn" id="btnWeather" title="切换海况 (V)">☀️ 热带</button>
+      <button class="hud-btn" id="btnChase" title="切换AI追逐激进度">⚡ 激战AI</button>
+      <button class="hud-btn" id="btnAudio" title="静音/开启音效">🔊</button>
+    </div>
+  </div>
+
+  <!-- 雷达小地图 -->
+  <div class="radar-box glass">
+    <canvas id="radarCanvas" width="220" height="220"></canvas>
+  </div>
+
+  <!-- 动态战报/撞击提示流 -->
+  <div id="toastFeed"></div>
+
+  <!-- 触控操控区 -->
+  <div class="touch-controls">
+    <!-- 左手：拟真方向舵摇杆 -->
+    <div class="steer-pad glass" id="steerPad">
+      <div class="steer-ring"></div>
+      <div class="steer-labels"><span>PORT</span><span>STBD</span></div>
+      <div class="steer-knob" id="steerKnob"></div>
+      <div class="gyro-indicator" id="gyroStatus">GYRO 倾角控舵中 · 点此归零</div>
+    </div>
+
+    <!-- 右手：氮气/鸣笛 + 游艇油门推杆 -->
+    <div class="right-controls">
+      <div class="action-stack">
+        <button class="action-circle" id="btnHorn">📯<span>汽笛</span></button>
+        <button class="action-circle nitro-btn" id="btnNitro">🔥<span>氮气</span></button>
+      </div>
+      <div class="throttle-housing glass" id="throttleBox">
+        <span class="throttle-tag">MAX</span>
+        <div class="throttle-track"></div>
+        <div class="throttle-notch"></div>
+        <div class="throttle-handle" id="throttleHandle">N</div>
+        <span class="throttle-tag">REV</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 电脑键鼠操作提示 -->
+  <div class="desktop-hint glass">
+    WASD / 方向键 操控 · SPACE 氮气加速 · C 视角 · V 海况 · H 汽笛 · 鼠标拖拽环视
+  </div>
+</div>
+
+<!-- 启航液态磨砂面板 -->
+<div id="startOverlay">
+  <div class="start-card glass-strong">
+    <div class="brand-kicker">WEBGL2 · 6-LAYER GERSTNER · 6-DOF</div>
+    <h1 class="brand-title">AZURE WAKE 3D</h1>
+    <p class="brand-sub">
+      无限海域游艇拟真驾驶模拟器 — 实时 6 层深水海浪、五点浮力腾空滑行、开尔文尾流与 3D 弹道水花、智能 AI 游艇追逐与刚体碰撞，全端支持手机陀螺仪、平板触控与桌面键鼠。
+    </p>
+    <div class="preset-grid" id="weatherPicker">
+      <div class="preset-card selected" data-preset="0">
+        <span class="preset-name">☀️ 热带碧海</span>
+        <span class="preset-desc">清澈翡翠浪 · 1.2m 涌</span>
+      </div>
+      <div class="preset-card" data-preset="1">
+        <span class="preset-name">🌅 黄金落日</span>
+        <span class="preset-desc">碎金余晖 · 1.9m 涌</span>
+      </div>
+      <div class="preset-card" data-preset="2">
+        <span class="preset-name">⛈️ 狂风怒涛</span>
+        <span class="preset-desc">极限飞跃 · 3.4m 巨浪</span>
+      </div>
+    </div>
+    <button class="start-cta" id="btnLaunch">启 航 出 海 · LAUNCH</button>
+    <div class="feature-chips">
+      <span class="chip">零外链单文件</span>
+      <span class="chip">2500+ 3D 水花</span>
+      <span class="chip">iOS/Android 全向陀螺仪</span>
+      <span class="chip">Web Audio V8 声浪</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // =========================================================================
+  // 1. 全局配置与海况预设 (3 套实时海况 + 6 层 Gerstner 波谱参数)
+  // =========================================================================
+  const TWO_PI = Math.PI * 2;
+  const GRAVITY = 9.81;
+
+  // 每层 Gerstner 波: [dirX, dirZ, steepness, wavelength]
+  const WEATHER_PRESETS = [
+    {
+      id: 0,
+      name: '☀️ 热带',
+      label: '热带碧海',
+      sunDir: [0.48, 0.62, -0.62],
+      sunColor: [1.0, 0.96, 0.88],
+      skyTop: [0.06, 0.34, 0.72],
+      skyHorizon: [0.56, 0.84, 0.96],
+      deepColor: [0.008, 0.11, 0.24],
+      shallowColor: [0.02, 0.42, 0.52],
+      sssColor: [0.05, 0.72, 0.68],
+      fogColor: [0.56, 0.82, 0.94],
+      fogDensity: 0.00052,
+      windSpeed: 7.0,
+      waveScale: 1.0,
+      waves: [
+        [ 0.88,  0.47, 0.22, 68.0],
+        [ 0.42, -0.91, 0.17, 41.0],
+        [-0.74,  0.67, 0.14, 24.5],
+        [ 0.96, -0.28, 0.11, 14.2],
+        [-0.31, -0.95, 0.08,  8.4],
+        [ 0.63,  0.77, 0.06,  4.8]
+      ]
+    },
+    {
+      id: 1,
+      name: '🌅 落日',
+      label: '黄金落日',
+      sunDir: [0.18, 0.19, -0.96],
+      sunColor: [1.0, 0.56, 0.24],
+      skyTop: [0.10, 0.14, 0.34],
+      skyHorizon: [0.98, 0.52, 0.32],
+      deepColor: [0.015, 0.07, 0.16],
+      shallowColor: [0.06, 0.26, 0.36],
+      sssColor: [0.18, 0.56, 0.48],
+      fogColor: [0.88, 0.52, 0.38],
+      fogDensity: 0.00062,
+      windSpeed: 11.5,
+      waveScale: 1.45,
+      waves: [
+        [ 0.86,  0.51, 0.27, 76.0],
+        [ 0.38, -0.92, 0.21, 46.0],
+        [-0.78,  0.62, 0.16, 26.0],
+        [ 0.94, -0.34, 0.13, 15.0],
+        [-0.25, -0.97, 0.09,  9.0],
+        [ 0.60,  0.80, 0.07,  5.2]
+      ]
+    },
+    {
+      id: 2,
+      name: '⛈️ 巨浪',
+      label: '狂风怒涛',
+      sunDir: [-0.35, 0.38, -0.85],
+      sunColor: [0.74, 0.82, 0.90],
+      skyTop: [0.06, 0.10, 0.16],
+      skyHorizon: [0.28, 0.36, 0.44],
+      deepColor: [0.006, 0.05, 0.09],
+      shallowColor: [0.02, 0.18, 0.22],
+      sssColor: [0.06, 0.44, 0.42],
+      fogColor: [0.26, 0.34, 0.42],
+      fogDensity: 0.00088,
+      windSpeed: 21.0,
+      waveScale: 2.35,
+      waves: [
+        [ 0.91,  0.41, 0.34, 92.0],
+        [ 0.52, -0.85, 0.27, 54.0],
+        [-0.69,  0.72, 0.22, 31.0],
+        [ 0.95, -0.31, 0.16, 17.5],
+        [-0.38, -0.92, 0.12, 10.2],
+        [ 0.72,  0.69, 0.09,  5.8]
+      ]
+    }
+  ];
+
+  // =========================================================================
+  // 2. 零依赖 3D 向量与矩阵数学库
+  // =========================================================================
+  const Math3D = {
+    clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v),
+    lerp: (a, b, t) => a + (b - a) * t,
+    smoothstep: (e0, e1, x) => {
+      const t = Math3D.clamp((x - e0) / (e1 - e0), 0, 1);
+      return t * t * (3 - 2 * t);
+    },
+    lerpVec3: (out, a, b, t) => {
+      out[0] = a[0] + (b[0] - a[0]) * t;
+      out[1] = a[1] + (b[1] - a[1]) * t;
+      out[2] = a[2] + (b[2] - a[2]) * t;
+      return out;
+    },
+    normalize3: (v) => {
+      const l = Math.hypot(v[0], v[1], v[2]) || 1;
+      v[0] /= l; v[1] /= l; v[2] /= l;
+      return v;
+    },
+    cross3: (out, a, b) => {
+      const ax = a[0], ay = a[1], az = a[2];
+      const bx = b[0], by = b[1], bz = b[2];
+      out[0] = ay * bz - az * by;
+      out[1] = az * bx - ax * bz;
+      out[2] = ax * by - ay * bx;
+      return out;
+    },
+    mat4Create: () => new Float32Array([
+      1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1
+    ]),
+    mat4Perspective: (out, fovy, aspect, near, far) => {
+      const f = 1.0 / Math.tan(fovy * 0.5);
+      const nf = 1 / (near - far);
+      out.fill(0);
+      out[0] = f / aspect;
+      out[5] = f;
+      out[10] = (far + near) * nf;
+      out[11] = -1;
+      out[14] = (2 * far * near) * nf;
+      return out;
+    },
+    mat4LookAt: (out, eye, center, up) => {
+      let zx = eye[0] - center[0], zy = eye[1] - center[1], zz = eye[2] - center[2];
+      let len = Math.hypot(zx, zy, zz) || 1;
+      zx /= len; zy /= len; zz /= len;
+
+      let xx = up[1] * zz - up[2] * zy;
+      let xy = up[2] * zx - up[0] * zz;
+      let xz = up[0] * zy - up[1] * zx;
+      len = Math.hypot(xx, xy, xz) || 1;
+      xx /= len; xy /= len; xz /= len;
+
+      const yx = zy * xz - zz * xy;
+      const yy = zz * xx - zx * xz;
+      const yz = zx * xy - zy * xx;
+
+      out[0] = xx; out[1] = yx; out[2] = zx; out[3] = 0;
+      out[4] = xy; out[5] = yy; out[6] = zy; out[7] = 0;
+      out[8] = xz; out[9] = yz; out[10] = zz; out[11] = 0;
+      out[12] = -(xx * eye[0] + xy * eye[1] + xz * eye[2]);
+      out[13] = -(yx * eye[0] + yy * eye[1] + yz * eye[2]);
+      out[14] = -(zx * eye[0] + zy * eye[1] + zz * eye[2]);
+      out[15] = 1;
+      return out;
+    },
+    mat4Multiply: (out, a, b) => {
+      for (let i = 0; i < 4; i++) {
+        const b0 = b[i*4], b1 = b[i*4+1], b2 = b[i*4+2], b3 = b[i*4+3];
+        out[i*4+0] = a[0]*b0 + a[4]*b1 + a[8]*b2  + a[12]*b3;
+        out[i*4+1] = a[1]*b0 + a[5]*b1 + a[9]*b2  + a[13]*b3;
+        out[i*4+2] = a[2]*b0 + a[6]*b1 + a[10]*b2 + a[14]*b3;
+        out[i*4+3] = a[3]*b0 + a[7]*b1 + a[11]*b2 + a[15]*b3;
+      }
+      return out;
+    },
+    // 构建游艇/物体模型矩阵：平移 + Y(Yaw) -> X(Pitch) -> Z(Roll) + 缩放
+    mat4FromTRS: (out, x, y, z, yaw, pitch, roll, sx = 1, sy = 1, sz = 1) => {
+      const cy = Math.cos(yaw),   syaw = Math.sin(yaw);
+      const cp = Math.cos(pitch), sp   = Math.sin(pitch);
+      const cr = Math.cos(roll),  sr   = Math.sin(roll);
+
+      // R = Ry(yaw) * Rx(pitch) * Rz(roll)
+      const m00 = cy * cr + syaw * sp * sr;
+      const m01 = cp * sr;
+      const m02 = -syaw * cr + cy * sp * sr;
+
+      const m10 = -cy * sr + syaw * sp * cr;
+      const m11 = cp * cr;
+      const m12 = syaw * sr + cy * sp * cr;
+
+      const m20 = syaw * cp;
+      const m21 = -sp;
+      const m22 = cy * cp;
+
+      out[0] = m00 * sx; out[1] = m01 * sx; out[2] = m02 * sx; out[3] = 0;
+      out[4] = m10 * sy; out[5] = m11 * sy; out[6] = m12 * sy; out[7] = 0;
+      out[8] = m20 * sz; out[9] = m21 * sz; out[10] = m22 * sz; out[11] = 0;
+      out[12] = x;       out[13] = y;       out[14] = z;        out[15] = 1;
+      return out;
+    }
+  };
+
+  // =========================================================================
+  // 3. 6 层 Gerstner 海浪 CPU 实时采样引擎（与 GLSL 着色器 100% 数学同源）
+  // =========================================================================
+  const OceanState = {
+    time: 0,
+    originOffsetX: 0, // 浮动原点累计世界偏移 X
+    originOffsetZ: 0, // 浮动原点累计世界偏移 Z
+    targetPreset: 0,
+    // 当前平滑插值后的环境与波浪参数
+    sunDir: new Float32Array([0.48, 0.62, -0.62]),
+    sunColor: new Float32Array([1.0, 0.96, 0.88]),
+    skyTop: new Float32Array([0.06, 0.34, 0.72]),
+    skyHorizon: new Float32Array([0.56, 0.84, 0.96]),
+    deepColor: new Float32Array([0.008, 0.11, 0.24]),
+    shallowColor: new Float32Array([0.02, 0.42, 0.52]),
+    sssColor: new Float32Array([0.05, 0.72, 0.68]),
+    fogColor: new Float32Array([0.56, 0.82, 0.94]),
+    fogDensity: 0.00052,
+    windSpeed: 7.0,
+    // 6 个 vec4: [dirX, dirZ, steepness, wavelength]
+    wavesFlat: new Float32Array(24),
+
+    init(presetIdx = 0) {
+      this.targetPreset = presetIdx;
+      const p = WEATHER_PRESETS[presetIdx];
+      this.sunDir.set(p.sunDir); Math3D.normalize3(this.sunDir);
+      this.sunColor.set(p.sunColor);
+      this.skyTop.set(p.skyTop);
+      this.skyHorizon.set(p.skyHorizon);
+      this.deepColor.set(p.deepColor);
+      this.shallowColor.set(p.shallowColor);
+      this.sssColor.set(p.sssColor);
+      this.fogColor.set(p.fogColor);
+      this.fogDensity = p.fogDensity;
+      this.windSpeed = p.windSpeed;
+      for (let i = 0; i < 6; i++) {
+        const w = p.waves[i];
+        const l = Math.hypot(w[0], w[1]) || 1;
+        this.wavesFlat[i * 4 + 0] = w[0] / l;
+        this.wavesFlat[i * 4 + 1] = w[1] / l;
+        this.wavesFlat[i * 4 + 2] = w[2];
+        this.wavesFlat[i * 4 + 3] = w[3];
+      }
+    },
+
+    update(dt) {
+      this.time += dt;
+      const p = WEATHER_PRESETS[this.targetPreset];
+      const k = Math.min(1, dt * 1.35);
+      Math3D.lerpVec3(this.sunDir, this.sunDir, p.sunDir, k);
+      Math3D.normalize3(this.sunDir);
+      Math3D.lerpVec3(this.sunColor, this.sunColor, p.sunColor, k);
+      Math3D.lerpVec3(this.skyTop, this.skyTop, p.skyTop, k);
+      Math3D.lerpVec3(this.skyHorizon, this.skyHorizon, p.skyHorizon, k);
+      Math3D.lerpVec3(this.deepColor, this.deepColor, p.deepColor, k);
+      Math3D.lerpVec3(this.shallowColor, this.shallowColor, p.shallowColor, k);
+      Math3D.lerpVec3(this.sssColor, this.sssColor, p.sssColor, k);
+      Math3D.lerpVec3(this.fogColor, this.fogColor, p.fogColor, k);
+      this.fogDensity = Math3D.lerp(this.fogDensity, p.fogDensity, k);
+      this.windSpeed = Math3D.lerp(this.windSpeed, p.windSpeed, k);
+
+      for (let i = 0; i < 6; i++) {
+        const w = p.waves[i];
+        const l = Math.hypot(w[0], w[1]) || 1;
+        const idx = i * 4;
+        this.wavesFlat[idx + 0] = Math3D.lerp(this.wavesFlat[idx + 0], w[0] / l, k);
+        this.wavesFlat[idx + 1] = Math3D.lerp(this.wavesFlat[idx + 1], w[1] / l, k);
+        this.wavesFlat[idx + 2] = Math3D.lerp(this.wavesFlat[idx + 2], w[2], k);
+        this.wavesFlat[idx + 3] = Math3D.lerp(this.wavesFlat[idx + 3], w[3], k);
+      }
+    },
+
+    // 精确采样局部坐标 (x, z) 处的波面高度、法线与垂直波速（含一次迭代反求水平位移）
+    sample(x, z, out = { y: 0, nx: 0, ny: 1, nz: 0, vy: 0, foam: 0 }) {
+      const t = this.time;
+      const wx = x + this.originOffsetX;
+      const wz = z + this.originOffsetZ;
+      const wf = this.wavesFlat;
+
+      // 一次水平位移反求，提高陡浪处浮力采样精确度
+      let dx = 0, dz = 0;
+      for (let i = 0; i < 6; i++) {
+        const idx = i * 4;
+        const dirX = wf[idx], dirZ = wf[idx + 1], st = wf[idx + 2], wl = wf[idx + 3];
+        const k = TWO_PI / wl;
+        const c = Math.sqrt(GRAVITY / k);
+        const a = st / k;
+        const f = k * (dirX * wx + dirZ * wz - c * t);
+        const cf = Math.cos(f);
+        dx += dirX * (a * cf);
+        dz += dirZ * (a * cf);
+      }
+
+      const sx = wx - dx * 0.75;
+      const sz = wz - dz * 0.75;
+      let y = 0, vy = 0;
+      let tx = 1, ty = 0, tz = 0;
+      let bx = 0, by = 0, bz = 1;
+      let foam = 0;
+
+      for (let i = 0; i < 6; i++) {
+        const idx = i * 4;
+        const dirX = wf[idx], dirZ = wf[idx + 1], st = wf[idx + 2], wl = wf[idx + 3];
+        const k = TWO_PI / wl;
+        const c = Math.sqrt(GRAVITY / k);
+        const a = st / k;
+        const f = k * (dirX * sx + dirZ * sz - c * t);
+        const sf = Math.sin(f);
+        const cf = Math.cos(f);
+
+        y += a * sf;
+        vy += -a * k * c * cf;
+
+        tx += -dirX * dirX * (st * sf);
+        ty +=  dirX * (st * cf);
+        tz += -dirX * dirZ * (st * sf);
+
+        bx += -dirX * dirZ * (st * sf);
+        by +=  dirZ * (st * cf);
+        bz += -dirZ * dirZ * (st * sf);
+
+        if (sf > 0.35) foam += (sf - 0.35) * st * 2.2;
+      }
+
+      // N = normalize(cross(B, T))
+      let nx = by * tz - bz * ty;
+      let ny = bz * tx - bx * tz;
+      let nz = bx * ty - by * tx;
+      const nl = Math.hypot(nx, ny, nz) || 1;
+      out.y = y;
+      out.nx = nx / nl;
+      out.ny = ny / nl;
+      out.nz = nz / nl;
+      out.vy = vy;
+      out.foam = Math3D.clamp(foam, 0, 1);
+      return out;
+    }
+  };
+
+  // =========================================================================
+  // 4. WebGL2 全套 GLSL ES 3.00 着色器源码
+  // =========================================================================
+  const SHADERS = {
+    // --- 4.1 天空穹顶 + 物理太阳光晕着色器 ---
+    skyVert: `#version 300 es
+precision highp float;
+layout(location = 0) in vec2 aPos;
+out vec2 vNdc;
+void main() {
+  vNdc = aPos;
+  gl_Position = vec4(aPos, 0.9999, 1.0);
+}`,
+
+    skyFrag: `#version 300 es
+precision highp float;
+in vec2 vNdc;
+uniform mat4 uInvProj;
+uniform mat4 uInvViewRot;
+uniform vec3 uSunDir;
+uniform vec3 uSunColor;
+uniform vec3 uSkyTop;
+uniform vec3 uSkyHorizon;
+uniform float uTime;
+out vec4 fragColor;
+
+float hash21(vec2 p) {
+  p = fract(p * vec2(123.34, 456.21));
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+
+float noise2(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash21(i);
+  float b = hash21(i + vec2(1.0, 0.0));
+  float c = hash21(i + vec2(0.0, 1.0));
+  float d = hash21(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+float fbm(vec2 p) {
+  float v = 0.0;
+  float a = 0.5;
+  for (int i = 0; i < 4; i++) {
+    v += a * noise2(p);
+    p = p * 2.04 + vec2(17.1, 31.7);
+    a *= 0.5;
+  }
+  return v;
+}
+
+void main() {
+  vec4 viewPos = uInvProj * vec4(vNdc, 1.0, 1.0);
+  vec3 dir = normalize((uInvViewRot * vec4(normalize(viewPos.xyz), 0.0)).xyz);
+  float h = clamp(dir.y, 0.0, 1.0);
+
+  // 大气瑞利渐变
+  vec3 col = mix(uSkyHorizon, uSkyTop, pow(h, 0.52));
+
+  // 地平线暖雾带
+  float horizonBand = exp(-abs(dir.y) * 9.5);
+  col = mix(col, mix(uSkyHorizon, uSunColor, 0.25), horizonBand * 0.45);
+
+  // 体积感高层云带
+  if (dir.y > 0.015) {
+    vec2 cloudUV = dir.xz / (dir.y + 0.14) * 1.15 + vec2(uTime * 0.012, uTime * 0.005);
+    float c = fbm(cloudUV * 1.8);
+    float cloudMask = smoothstep(0.46, 0.80, c) * smoothstep(0.015, 0.16, dir.y) * (1.0 - smoothstep(0.55, 0.96, dir.y));
+    float sunLit = pow(max(dot(dir, uSunDir), 0.0), 3.0);
+    vec3 cloudCol = mix(uSkyHorizon * 0.92 + vec3(0.14), uSunColor * 1.25, sunLit * 0.65);
+    col = mix(col, cloudCol, cloudMask * 0.58);
+  }
+
+  // 太阳本体与大气米氏散射光晕
+  float sunDot = max(dot(dir, normalize(uSunDir)), 0.0);
+  col += uSunColor * pow(sunDot, 12.0) * 0.28;
+  col += uSunColor * pow(sunDot, 96.0) * 0.72;
+  col += uSunColor * smoothstep(0.9991, 0.99975, sunDot) * 2.6;
+
+  // ACES 色调映射
+  col = (col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14);
+  fragColor = vec4(pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.15)), 1.0);
+}`,
+
+    // --- 4.2 无限 6 层 Gerstner 海浪渲染着色器 ---
+    oceanVert: `#version 300 es
+precision highp float;
+layout(location = 0) in vec2 aGrid; // [-1, 1] 归一化极密网格
+
+uniform mat4 uViewProj;
+uniform vec2 uGridOrigin;    // 对齐后的局部网格中心
+uniform vec2 uWorldOffset;   // 浮动原点累计偏移
+uniform float uTime;
+uniform float uGridRadius;
+uniform vec4 uWaves[6];      // (dirX, dirZ, steepness, wavelength)
+
+out vec3 vWorldPos;
+out vec3 vNormal;
+out float vFoam;
+out float vDist;
+out vec2 vWorldCoord;
+
+const float TWO_PI = 6.28318530718;
+const float G = 9.81;
+
+void main() {
+  // 径向指数拉伸：近处极高密度 (0.35m)，远处延展至 2200m
+  vec2 s = sign(aGrid);
+  vec2 a = abs(aGrid);
+  vec2 localXZ = uGridOrigin + s * pow(a, vec2(2.45)) * uGridRadius;
+  vec2 worldXZ = localXZ + uWorldOffset;
+
+  float distFromCenter = length(localXZ - uGridOrigin);
+  // 远处高频小波平滑衰减，彻底消除远景摩尔纹闪烁
+  float detailFade = 1.0 - smoothstep(260.0, 1400.0, distFromCenter);
+
+  vec3 disp = vec3(0.0);
+  vec3 T = vec3(1.0, 0.0, 0.0);
+  vec3 B = vec3(0.0, 0.0, 1.0);
+  float crestFoam = 0.0;
+
+  for (int i = 0; i < 6; i++) {
+    vec4 w = uWaves[i];
+    vec2 d = normalize(w.xy);
+    float wl = w.w;
+    float k = TWO_PI / wl;
+    float c = sqrt(G / k);
+    float fade = (i >= 3) ? detailFade : (1.0 - smoothstep(850.0, 2100.0, distFromCenter) * 0.65);
+    float st = w.z * fade;
+    float amp = st / k;
+    float phase = k * (dot(d, worldXZ) - c * uTime);
+    float sf = sin(phase);
+    float cf = cos(phase);
+
+    disp.x += d.x * (amp * cf);
+    disp.y += amp * sf;
+    disp.z += d.y * (amp * cf);
+
+    T += vec3(-d.x * d.x * (st * sf), d.x * (st * cf), -d.x * d.y * (st * sf));
+    B += vec3(-d.x * d.y * (st * sf), d.y * (st * cf), -d.y * d.y * (st * sf));
+
+    crestFoam += max(0.0, sf - 0.42) * st * 2.15;
+  }
+
+  vec3 pos = vec3(localXZ.x + disp.x, disp.y, localXZ.y + disp.z);
+  vWorldPos = pos;
+  vNormal = normalize(cross(B, T));
+  vFoam = clamp(crestFoam, 0.0, 1.0);
+  vDist = distFromCenter;
+  vWorldCoord = worldXZ + disp.xz;
+
+  gl_Position = uViewProj * vec4(pos, 1.0);
+}`,
+
+    oceanFrag: `#version 300 es
+precision highp float;
+in vec3 vWorldPos;
+in vec3 vNormal;
+in float vFoam;
+in float vDist;
+in vec2 vWorldCoord;
+
+uniform vec3 uCamPos;
+uniform vec3 uSunDir;
+uniform vec3 uSunColor;
+uniform vec3 uSkyTop;
+uniform vec3 uSkyHorizon;
+uniform vec3 uDeepColor;
+uniform vec3 uShallowColor;
+uniform vec3 uSssColor;
+uniform vec3 uFogColor;
+uniform float uFogDensity;
+uniform float uTime;
+uniform vec3 uBoatPos;
+uniform vec2 uBoatFwd;
+uniform float uBoatSpeed;
+
+out vec4 fragColor;
+
+float hash21(vec2 p) {
+  p = fract(p * vec2(234.34, 435.345));
+  p += dot(p, p + 34.23);
+  return fract(p.x * p.y);
+}
+
+float vnoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
+    mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x),
+    f.y
+  );
+}
+
+// 多频微波程序化法线细节，让近处水面波光粼粼
+vec3 microNormal(vec2 p, float t, float fade) {
+  vec2 uv1 = p * 0.48 + vec2(t * 0.42, -t * 0.31);
+  vec2 uv2 = p * 1.18 + vec2(-t * 0.56, t * 0.48);
+  float e = 0.08;
+  float h0 = vnoise(uv1) * 0.6 + vnoise(uv2) * 0.4;
+  float hx = vnoise(uv1 + vec2(e, 0.0)) * 0.6 + vnoise(uv2 + vec2(e, 0.0)) * 0.4;
+  float hz = vnoise(uv1 + vec2(0.0, e)) * 0.6 + vnoise(uv2 + vec2(0.0, e)) * 0.4;
+  float amp = 0.38 * fade;
+  return normalize(vec3((h0 - hx) * amp, 1.0, (h0 - hz) * amp));
+}
+
+void main() {
+  vec3 V = normalize(uCamPos - vWorldPos);
+  vec3 L = normalize(uSunDir);
+
+  float microFade = 1.0 - smoothstep(25.0, 320.0, vDist);
+  vec3 mN = microNormal(vWorldCoord, uTime, microFade);
+  vec3 N = normalize(vec3(vNormal.x + mN.x * 0.55, vNormal.y, vNormal.z + mN.z * 0.55));
+
+  // Schlick 菲涅尔（真实海水 F0 = 0.02）
+  float NdotV = max(dot(N, V), 0.001);
+  float fresnel = 0.02 + 0.98 * pow(1.0 - NdotV, 5.0);
+
+  // 天空反射色
+  vec3 R = reflect(-V, N);
+  float rY = clamp(R.y, 0.0, 1.0);
+  vec3 skyRefl = mix(uSkyHorizon, uSkyTop, pow(rY, 0.58));
+  float sunReflDot = max(dot(R, L), 0.0);
+  skyRefl += uSunColor * pow(sunReflDot, 16.0) * 0.25;
+
+  // 深水/浅水折射 + 波峰次表面散射 (SSS 翡翠透光)
+  float waveHeightFactor = clamp((vWorldPos.y + 1.4) * 0.32, 0.0, 1.0);
+  vec3 waterBody = mix(uDeepColor, uShallowColor, waveHeightFactor * (0.45 + 0.55 * max(dot(N, L), 0.0)));
+  float sssView = pow(clamp(dot(V, -L + N * 0.45), 0.0, 1.0), 3.2);
+  float sssCrest = smoothstep(-0.2, 2.2, vWorldPos.y) * (0.35 + 0.65 * sssView);
+  waterBody += uSssColor * sssCrest * 0.58;
+
+  // 菲涅尔混合水体与天空倒影
+  vec3 col = mix(waterBody, skyRefl, clamp(fresnel * 1.08, 0.0, 0.96));
+
+  // 双层太阳镜面高光（宽光晕 + 锐利碎金闪点）
+  vec3 H = normalize(L + V);
+  float NdotH = max(dot(N, H), 0.0);
+  float specBroad = pow(NdotH, 64.0) * 0.42;
+  float specSharp = pow(NdotH, 460.0) * 2.85;
+  col += uSunColor * (specBroad + specSharp) * (0.4 + 0.6 * fresnel);
+
+  // 浪尖碎泡沫 + 玩家船周近场水花白沫
+  float fNoise = vnoise(vWorldCoord * 0.72 + vec2(uTime * 0.35, -uTime * 0.22)) * 0.65
+               + vnoise(vWorldCoord * 2.1 - vec2(uTime * 0.5, uTime * 0.4)) * 0.35;
+  float foamMask = smoothstep(0.32, 0.78, vFoam * 1.15 + fNoise * 0.48 - 0.18);
+
+  // 玩家船体近场劈浪泡沫圈
+  vec2 rel = vWorldPos.xz - uBoatPos.xz;
+  vec2 fwd = normalize(uBoatFwd);
+  vec2 right = vec2(-fwd.y, fwd.x);
+  float along = dot(rel, fwd);
+  float across = abs(dot(rel, right));
+  if (along > -9.0 && along < 7.0 && across < 5.5) {
+    float hullRing = exp(-pow((across - (1.85 - max(0.0, along) * 0.2)), 2.0) * 1.4)
+                   * smoothstep(-9.0, -2.0, along) * smoothstep(6.2, 1.5, along);
+    float speedFactor = clamp(uBoatSpeed / 14.0, 0.15, 1.4);
+    foamMask = max(foamMask, clamp(hullRing * speedFactor * (0.65 + 0.55 * fNoise), 0.0, 0.95));
+  }
+
+  vec3 foamCol = mix(uSkyHorizon * 0.82 + vec3(0.24), vec3(1.0), 0.58) * (0.72 + 0.28 * max(dot(N, L), 0.0));
+  col = mix(col, foamCol, foamMask * (1.0 - smoothstep(260.0, 950.0, vDist) * 0.75));
+
+  // 海天距离雾化
+  float dist = length(uCamPos - vWorldPos);
+  float fog = 1.0 - exp(-pow(dist * uFogDensity, 1.42));
+  col = mix(col, uFogColor, clamp(fog, 0.0, 1.0));
+
+  // ACES 色调映射与 Gamma 校正
+  col = (col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14);
+  fragColor = vec4(pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.15)), 1.0);
+}`,
+
+    // --- 4.3 游艇与海域地标 PBR 金属/清漆着色器 ---
+    meshVert: `#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aNorm;
+layout(location = 2) in vec3 aColor;
+layout(location = 3) in vec2 aMat; // x: roughness, y: metallic/emissive (>1.0 为自发光)
+
+uniform mat4 uModel;
+uniform mat4 uViewProj;
+
+out vec3 vWorldPos;
+out vec3 vNormal;
+out vec3 vColor;
+out vec2 vMat;
+
+void main() {
+  vec4 wp = uModel * vec4(aPos, 1.0);
+  vWorldPos = wp.xyz;
+  vNormal = normalize(mat3(uModel) * aNorm);
+  vColor = aColor;
+  vMat = aMat;
+  gl_Position = uViewProj * wp;
+}`,
+
+    meshFrag: `#version 300 es
+precision highp float;
+in vec3 vWorldPos;
+in vec3 vNormal;
+in vec3 vColor;
+in vec2 vMat;
+
+uniform vec3 uCamPos;
+uniform vec3 uSunDir;
+uniform vec3 uSunColor;
+uniform vec3 uSkyTop;
+uniform vec3 uSkyHorizon;
+uniform vec3 uDeepColor;
+uniform vec3 uFogColor;
+uniform float uFogDensity;
+uniform vec3 uTint; // 船体涂装主色覆盖（白色基底乘法）
+
+out vec4 fragColor;
+
+void main() {
+  vec3 N = normalize(vNormal);
+  vec3 V = normalize(uCamPos - vWorldPos);
+  vec3 L = normalize(uSunDir);
+  vec3 H = normalize(L + V);
+
+  float rough = clamp(vMat.x, 0.06, 0.98);
+  float meta = vMat.y;
+
+  // 自发光航行灯/灯塔光球
+  if (meta > 1.2) {
+    vec3 em = vColor * 2.1;
+    em = (em * (2.51 * em + 0.03)) / (em * (2.43 * em + 0.59) + 0.14);
+    fragColor = vec4(pow(clamp(em, 0.0, 1.0), vec3(1.0 / 2.15)), 1.0);
+    return;
+  }
+
+  vec3 albedo = vColor * uTint;
+
+  // 吃水线润湿深色效果
+  float wet = 1.0 - smoothstep(-0.3, 0.55, vWorldPos.y);
+  albedo *= mix(1.0, 0.76, wet);
+  rough = mix(rough, 0.12, wet * 0.7);
+
+  // 半球环境光（天空 + 海面反射光）
+  float hemi = N.y * 0.5 + 0.5;
+  vec3 amb = mix(uDeepColor * 1.7 + vec3(0.06, 0.14, 0.18), mix(uSkyHorizon, uSkyTop, 0.45), hemi);
+
+  // 太阳漫反射
+  float NdotL = max(dot(N, L), 0.0);
+  vec3 diff = albedo * (amb * 0.62 + uSunColor * NdotL * 1.05);
+
+  // 简化 GGX/Blinn-Phong 镜面反射 + 菲涅尔清漆
+  float NdotV = max(dot(N, V), 0.001);
+  float F0 = mix(0.04, 0.85, clamp(meta, 0.0, 1.0));
+  float fresnel = F0 + (1.0 - F0) * pow(1.0 - NdotV, 4.5);
+
+  float shininess = mix(180.0, 10.0, rough * rough);
+  float spec = pow(max(dot(N, H), 0.0), shininess) * (1.2 - rough * 0.75);
+
+  vec3 R = reflect(-V, N);
+  vec3 envRefl = mix(uDeepColor * 2.2, mix(uSkyHorizon, uSkyTop, clamp(R.y, 0.0, 1.0)), smoothstep(-0.1, 0.2, R.y));
+  vec3 specCol = mix(vec3(1.0), albedo, clamp(meta, 0.0, 1.0));
+
+  vec3 col = diff * (1.0 - clamp(meta, 0.0, 1.0) * 0.65)
+           + specCol * (uSunColor * spec * 1.15 + envRefl * fresnel * (1.0 - rough * 0.65));
+
+  // 海天距离雾化
+  float dist = length(uCamPos - vWorldPos);
+  float fog = 1.0 - exp(-pow(dist * uFogDensity, 1.42));
+  col = mix(col, uFogColor, clamp(fog, 0.0, 1.0));
+
+  col = (col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14);
+  fragColor = vec4(pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.15)), 1.0);
+}`,
+
+    // --- 4.4 3D 弹道水花与浪沫粒子着色器 ---
+    particleVert: `#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in float aSize;
+layout(location = 2) in float aAlpha;
+layout(location = 3) in float aType; // 0: 白水花, 1: 氮气蓝焰/涡流, 2: 撞击火星
+
+uniform mat4 uViewProj;
+uniform vec3 uCamPos;
+uniform float uViewportH;
+
+out float vAlpha;
+out float vType;
+
+void main() {
+  vec4 clip = uViewProj * vec4(aPos, 1.0);
+  float dist = max(1.5, length(uCamPos - aPos));
+  gl_Position = clip;
+  gl_PointSize = clamp((aSize * uViewportH * 0.56) / dist, 1.5, 96.0);
+  vAlpha = aAlpha;
+  vType = aType;
+}`,
+
+    particleFrag: `#version 300 es
+precision highp float;
+in float vAlpha;
+in float vType;
+uniform vec3 uSunColor;
+uniform vec3 uSkyHorizon;
+out vec4 fragColor;
+
+void main() {
+  vec2 uv = gl_PointCoord - vec2(0.5);
+  float r2 = dot(uv, uv);
+  if (r2 > 0.25) discard;
+
+  // 柔和泡沫水滴轮廓 + 内部层次高光
+  float soft = pow(1.0 - r2 * 4.0, 1.55);
+  vec3 col;
+  if (vType < 0.5) {
+    // 逼真 3D 泡沫水滴：迎光泛白，边缘带海天冷蓝阴影
+    float rim = smoothstep(0.05, 0.24, r2);
+    col = mix(vec3(0.98, 1.0, 1.0), uSkyHorizon * 0.78 + vec3(0.22), rim * 0.65);
+    col *= mix(vec3(0.88, 0.94, 1.0), uSunColor, 0.35);
+  } else if (vType < 1.5) {
+    // 涡轮氮气激流
+    col = mix(vec3(0.18, 0.92, 1.0), vec3(1.0, 0.96, 0.65), soft);
+  } else {
+    // 撞击火花
+    col = mix(vec3(1.0, 0.42, 0.12), vec3(1.0, 0.95, 0.68), soft);
+  }
+  fragColor = vec4(col, soft * vAlpha);
+}`,
+
+    // --- 4.5 开尔文尾流 V 型动态泡沫带着色器 ---
+    wakeVert: `#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aPos;   // x, y(高度偏移), z
+layout(location = 1) in vec2 aUV;    // u: 横向 0..1, v: 纵向生命进度
+layout(location = 2) in float aAlpha;
+
+uniform mat4 uViewProj;
+out vec2 vUV;
+out float vAlpha;
+
+void main() {
+  vUV = aUV;
+  vAlpha = aAlpha;
+  gl_Position = uViewProj * vec4(aPos, 1.0);
+}`,
+
+    wakeFrag: `#version 300 es
+precision highp float;
+in vec2 vUV;
+in float vAlpha;
+uniform float uTime;
+uniform vec3 uSkyHorizon;
+out vec4 fragColor;
+
+float hash21(vec2 p) {
+  p = fract(p * vec2(127.1, 311.7));
+  p += dot(p, p + 34.5);
+  return fract(p.x * p.y);
+}
+
+float noise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
+    mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x),
+    f.y
+  );
+}
+
+void main() {
+  // 开尔文尾流双边锐利 V 翼 + 中央推进器湍流泡沫
+  float x = abs(vUV.x * 2.0 - 1.0);
+  float wing = exp(-pow((x - 0.78) * 5.2, 2.0));
+  float centerJet = exp(-pow(x * 3.1, 2.0)) * 0.78;
+  float n1 = noise(vec2(vUV.x * 6.0, vUV.y * 0.24 - uTime * 0.9));
+  float n2 = noise(vec2(vUV.x * 14.0, vUV.y * 0.65 + uTime * 0.5));
+  float foamTex = n1 * 0.6 + n2 * 0.4;
+
+  float edgeFade = smoothstep(1.0, 0.82, x);
+  float pattern = (wing * 1.1 + centerJet) * (0.48 + 0.72 * foamTex) * edgeFade;
+  float alpha = clamp(pattern * vAlpha, 0.0, 0.88);
+  if (alpha < 0.02) discard;
+
+  vec3 col = mix(uSkyHorizon * 0.75 + vec3(0.28), vec3(0.98, 1.0, 1.0), clamp(pattern * 0.85, 0.0, 1.0));
+  fragColor = vec4(col, alpha);
+}`
+  };
+
+  // =========================================================================
+  // 5. WebGL2 核心渲染封装与径向高密海洋网格构建
+  // =========================================================================
+  const canvas = document.getElementById('glCanvas');
+  const gl = canvas.getContext('webgl2', {
+    antialias: true,
+    alpha: false,
+    depth: true,
+    powerPreference: 'high-performance'
+  });
+
+  if (!gl) {
+    alert('当前浏览器不支持 WebGL2，请升级至新版 Chrome / Safari / Edge 浏览器。');
+    return;
+  }
+
+  function compileShader(type, src) {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      console.error('Shader compile error:', gl.getShaderInfoLog(sh));
+      throw new Error(gl.getShaderInfoLog(sh));
+    }
+    return sh;
+  }
+
+  function createProgram(vsSrc, fsSrc) {
+    const p = gl.createProgram();
+    gl.attachShader(p, compileShader(gl.VERTEX_SHADER, vsSrc));
+    gl.attachShader(p, compileShader(gl.FRAGMENT_SHADER, fsSrc));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      console.error('Program link error:', gl.getProgramInfoLog(p));
+      throw new Error(gl.getProgramInfoLog(p));
+    }
+    return p;
+  }
+
+  function getUniforms(prog, names) {
+    const map = {};
+    for (const n of names) map[n] = gl.getUniformLocation(prog, n);
+    return map;
+  }
+
+  const Programs = {
+    sky: (() => {
+      const p = createProgram(SHADERS.skyVert, SHADERS.skyFrag);
+      return { p, u: getUniforms(p, ['uInvProj', 'uInvViewRot', 'uSunDir', 'uSunColor', 'uSkyTop', 'uSkyHorizon', 'uTime']) };
+    })(),
+    ocean: (() => {
+      const p = createProgram(SHADERS.oceanVert, SHADERS.oceanFrag);
+      return {
+        p,
+        u: getUniforms(p, [
+          'uViewProj', 'uGridOrigin', 'uWorldOffset', 'uTime', 'uGridRadius', 'uWaves',
+          'uCamPos', 'uSunDir', 'uSunColor', 'uSkyTop', 'uSkyHorizon', 'uDeepColor',
+          'uShallowColor', 'uSssColor', 'uFogColor', 'uFogDensity', 'uBoatPos', 'uBoatFwd', 'uBoatSpeed'
+        ])
+      };
+    })(),
+    mesh: (() => {
+      const p = createProgram(SHADERS.meshVert, SHADERS.meshFrag);
+      return {
+        p,
+        u: getUniforms(p, [
+          'uModel', 'uViewProj', 'uCamPos', 'uSunDir', 'uSunColor', 'uSkyTop',
+          'uSkyHorizon', 'uDeepColor', 'uFogColor', 'uFogDensity', 'uTint'
+        ])
+      };
+    })(),
+    particle: (() => {
+      const p = createProgram(SHADERS.particleVert, SHADERS.particleFrag);
+      return { p, u: getUniforms(p, ['uViewProj', 'uCamPos', 'uViewportH', 'uSunColor', 'uSkyHorizon']) };
+    })(),
+    wake: (() => {
+      const p = createProgram(SHADERS.wakeVert, SHADERS.wakeFrag);
+      return { p, u: getUniforms(p, ['uViewProj', 'uTime', 'uSkyHorizon']) };
+    })()
+  };
+
+  // 全屏天空三角形 VAO
+  const SkyMesh = (() => {
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    const vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.bindVertexArray(null);
+    return { vao, count: 3 };
+  })();
+
+  // 高密度径向海洋网格（移动端 156x156 / 桌面端 210x210 自动分级）
+  const OceanMesh = (() => {
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    const N = isMobile ? 156 : 210;
+    const verts = new Float32Array((N + 1) * (N + 1) * 2);
+    let ptr = 0;
+    for (let z = 0; z <= N; z++) {
+      const nz = (z / N) * 2 - 1;
+      for (let x = 0; x <= N; x++) {
+        verts[ptr++] = (x / N) * 2 - 1;
+        verts[ptr++] = nz;
+      }
+    }
+    const indices = new Uint32Array(N * N * 6);
+    let ip = 0;
+    for (let z = 0; z < N; z++) {
+      for (let x = 0; x < N; x++) {
+        const i0 = z * (N + 1) + x;
+        const i1 = i0 + 1;
+        const i2 = i0 + (N + 1);
+        const i3 = i2 + 1;
+        indices[ip++] = i0; indices[ip++] = i2; indices[ip++] = i1;
+        indices[ip++] = i1; indices[ip++] = i2; indices[ip++] = i3;
+      }
+    }
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    const vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    const ebo = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
+    return { vao, count: indices.length, radius: 2250.0 };
+  })();
+
+  // =========================================================================
+  // 6. 参数化 3D 游艇与海域地标建模器 (11 floats/vertex: pos3, norm3, col3, mat2)
+  // =========================================================================
+  class MeshBuilder {
+    constructor() {
+      this.data = [];
+    }
+
+    pushTri(p0, p1, p2, col, rough = 0.35, meta = 0.0) {
+      const ux = p1[0] - p0[0], uy = p1[1] - p0[1], uz = p1[2] - p0[2];
+      const vx = p2[0] - p0[0], vy = p2[1] - p0[1], vz = p2[2] - p0[2];
+      let nx = uy * vz - uz * vy;
+      let ny = uz * vx - ux * vz;
+      let nz = ux * vy - uy * vx;
+      const len = Math.hypot(nx, ny, nz) || 1;
+      nx /= len; ny /= len; nz /= len;
+      const pts = [p0, p1, p2];
+      for (let i = 0; i < 3; i++) {
+        const p = pts[i];
+        this.data.push(p[0], p[1], p[2], nx, ny, nz, col[0], col[1], col[2], rough, meta);
+      }
+    }
+
+    pushQuad(p0, p1, p2, p3, col, rough = 0.35, meta = 0.0) {
+      this.pushTri(p0, p1, p2, col, rough, meta);
+      this.pushTri(p0, p2, p3, col, rough, meta);
+    }
+
+    pushBox(cx, cy, cz, sx, sy, sz, col, rough = 0.35, meta = 0.0, pitchTilt = 0) {
+      const hx = sx * 0.5, hy = sy * 0.5, hz = sz * 0.5;
+      const cp = Math.cos(pitchTilt), sp = Math.sin(pitchTilt);
+      const xform = (x, y, z) => {
+        const ry = y * cp - z * sp;
+        const rz = y * sp + z * cp;
+        return [cx + x, cy + ry, cz + rz];
+      };
+      const v = [
+        xform(-hx, -hy,  hz), xform( hx, -hy,  hz), xform( hx,  hy,  hz), xform(-hx,  hy,  hz),
+        xform(-hx, -hy, -hz), xform( hx, -hy, -hz), xform( hx,  hy, -hz), xform(-hx,  hy, -hz)
+      ];
+      this.pushQuad(v[0], v[1], v[2], v[3], col, rough, meta); // front +Z
+      this.pushQuad(v[5], v[4], v[7], v[6], col, rough, meta); // back -Z
+      this.pushQuad(v[3], v[2], v[6], v[7], col, rough, meta); // top +Y
+      this.pushQuad(v[4], v[5], v[1], v[0], col, rough, meta); // bottom -Y
+      this.pushQuad(v[1], v[5], v[6], v[2], col, rough, meta); // right +X
+      this.pushQuad(v[4], v[0], v[3], v[7], col, rough, meta); // left -X
+    }
+
+    pushCylinder(cx, cy, cz, rTop, rBot, height, segs, col, rough = 0.4, meta = 0.0) {
+      const y0 = cy - height * 0.5;
+      const y1 = cy + height * 0.5;
+      for (let i = 0; i < segs; i++) {
+        const a0 = (i / segs) * TWO_PI;
+        const a1 = ((i + 1) / segs) * TWO_PI;
+        const c0 = Math.cos(a0), s0 = Math.sin(a0);
+        const c1 = Math.cos(a1), s1 = Math.sin(a1);
+        const b0 = [cx + c0 * rBot, y0, cz + s0 * rBot];
+        const b1 = [cx + c1 * rBot, y0, cz + s1 * rBot];
+        const t0 = [cx + c0 * rTop, y1, cz + s0 * rTop];
+        const t1 = [cx + c1 * rTop, y1, cz + s1 * rTop];
+        this.pushQuad(b0, b1, t1, t0, col, rough, meta);
+        this.pushTri([cx, y1, cz], t0, t1, col, rough, meta);
+        this.pushTri([cx, y0, cz], b1, b0, col, rough, meta);
+      }
+    }
+
+    buildVAO() {
+      const arr = new Float32Array(this.data);
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      const vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
+      const stride = 11 * 4;
+      gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride, 0);
+      gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, stride, 12);
+      gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, stride, 24);
+      gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 2, gl.FLOAT, false, stride, 36);
+      gl.bindVertexArray(null);
+      return { vao, count: arr.length / 11 };
+    }
+  }
+
+  // 构建高精度深 V 豪华运动游艇（船首朝 +Z，右舷朝 -X，左舷朝 +X，上方 +Y）
+  function createYachtGeometry(variant = 'flagship') {
+    const mb = new MeshBuilder();
+
+    const isSuper = variant === 'super';
+    const isRacer = variant === 'racer';
+    const lenScale = isSuper ? 1.38 : (isRacer ? 0.92 : 1.05);
+    const beamScale = isSuper ? 1.24 : (isRacer ? 0.88 : 1.0);
+
+    // 纵向剖面定义：[z, halfBeamDeck, halfBeamChine, keelY, chineY, deckY]
+    const sections = [
+      [-4.6 * lenScale, 1.52 * beamScale, 1.38 * beamScale, -0.58, -0.10, 0.72],
+      [-2.8 * lenScale, 1.72 * beamScale, 1.54 * beamScale, -0.66, -0.14, 0.78],
+      [-0.6 * lenScale, 1.78 * beamScale, 1.56 * beamScale, -0.72, -0.16, 0.86],
+      [ 1.7 * lenScale, 1.56 * beamScale, 1.24 * beamScale, -0.62, -0.05, 0.96],
+      [ 3.6 * lenScale, 0.98 * beamScale, 0.64 * beamScale, -0.34,  0.14, 1.08],
+      [ 5.1 * lenScale, 0.34 * beamScale, 0.14 * beamScale,  0.04,  0.42, 1.18],
+      [ 5.8 * lenScale, 0.02,             0.01,              0.52,  0.76, 1.24]
+    ];
+
+    const hullWhite = [0.96, 0.97, 0.99];
+    const hullStripe = isRacer ? [0.95, 0.22, 0.26] : (isSuper ? [0.12, 0.20, 0.32] : [0.07, 0.58, 0.86]);
+    const keelDark = [0.11, 0.16, 0.24];
+    const teakWood = [0.64, 0.43, 0.23];
+    const glassCol = [0.06, 0.12, 0.18];
+    const chromeCol = [0.85, 0.90, 0.96];
+    const seatCream = [0.93, 0.90, 0.84];
+    const darkCarbon = [0.14, 0.16, 0.20];
+
+    // 1. 生成深 V 船体外壳（吃水底板 + 舷侧清漆 + 装饰彩带 + 甲板）
+    for (let i = 0; i < sections.length - 1; i++) {
+      const a = sections[i];
+      const b = sections[i + 1];
+
+      const aKeel = [0, a[3], a[0]], bKeel = [0, b[3], b[0]];
+      const aChL = [ a[2], a[4], a[0]], bChL = [ b[2], b[4], b[0]];
+      const aChR = [-a[2], a[4], a[0]], bChR = [-b[2], b[4], b[0]];
+
+      // 彩带分界高度
+      const aMidL = [ (a[2] + a[1]) * 0.51, a[4] + (a[5] - a[4]) * 0.54, a[0]];
+      const bMidL = [ (b[2] + b[1]) * 0.51, b[4] + (b[5] - b[4]) * 0.54, b[0]];
+      const aMidR = [-aMidL[0], aMidL[1], a[0]];
+      const bMidR = [-bMidL[0], bMidL[1], b[0]];
+
+      const aDkL = [ a[1], a[5], a[0]], bDkL = [ b[1], b[5], b[0]];
+      const aDkR = [-a[1], a[5], a[0]], bDkR = [-b[1], b[5], b[0]];
+
+      // 深 V 船底（左/右）
+      mb.pushQuad(aKeel, bKeel, bChL, aChL, keelDark, 0.22, 0.1);
+      mb.pushQuad(aKeel, aChR, bChR, bKeel, keelDark, 0.22, 0.1);
+
+      // 船舷下部（光泽白）
+      mb.pushQuad(aChL, bChL, bMidL, aMidL, hullWhite, 0.14, 0.08);
+      mb.pushQuad(aChR, aMidR, bMidR, bChR, hullWhite, 0.14, 0.08);
+
+      // 船舷上部（主题流线饰条）
+      mb.pushQuad(aMidL, bMidL, bDkL, aDkL, hullStripe, 0.16, 0.22);
+      mb.pushQuad(aMidR, aDkR, bDkR, bMidR, hullStripe, 0.16, 0.22);
+
+      // 主甲板（前段柚木太阳浴甲板，中后段宽敞舱板）
+      const deckC = (i >= 2) ? teakWood : [0.76, 0.56, 0.34];
+      mb.pushQuad(aDkR, aDkL, bDkL, bDkR, deckC, 0.58, 0.0);
+    }
+
+    // 2. 船尾封板（Transom）+ 游泳跳水平台
+    const s0 = sections[0];
+    mb.pushQuad([0, s0[3], s0[0]], [s0[2], s0[4], s0[0]], [s0[1], s0[5], s0[0]], [-s0[1], s0[5], s0[0]], hullWhite, 0.2, 0.05);
+    mb.pushTri([0, s0[3], s0[0]], [-s0[1], s0[5], s0[0]], [-s0[2], s0[4], s0[0]], hullWhite, 0.2, 0.05);
+    // 船尾柚木跳水平台
+    mb.pushBox(0, 0.26, s0[0] - 0.55, s0[1] * 1.85, 0.18, 1.05, teakWood, 0.55, 0.0);
+
+    // 3. 上层驾驶舱与流线挡风玻璃
+    const cabLen = isSuper ? 4.4 : 2.9;
+    const cabZ = isSuper ? 0.2 : 0.45;
+    const cabW = 1.28 * beamScale;
+    const cabH = isSuper ? 1.15 : 0.78;
+    // 船舱主体
+    mb.pushBox(0, 0.88 + cabH * 0.42, cabZ, cabW * 1.85, cabH, cabLen, hullWhite, 0.14, 0.1);
+    // 前倾全景熏黑玻璃挡风罩
+    mb.pushBox(0, 0.95 + cabH * 0.56, cabZ + cabLen * 0.44, cabW * 1.76, cabH * 0.78, 1.15, glassCol, 0.06, 0.65, -0.52);
+    // 两侧弦窗玻璃条
+    mb.pushBox( cabW * 0.94, 0.92 + cabH * 0.48, cabZ - 0.1, 0.08, cabH * 0.46, cabLen * 0.82, glassCol, 0.06, 0.7);
+    mb.pushBox(-cabW * 0.94, 0.92 + cabH * 0.48, cabZ - 0.1, 0.08, cabH * 0.46, cabLen * 0.82, glassCol, 0.06, 0.7);
+
+    // 飞桥 / 运动雷达拱架 (Radar Arch)
+    const archY = 0.95 + cabH + 0.58;
+    const archZ = cabZ - cabLen * 0.34;
+    mb.pushBox( cabW * 0.86, archY - 0.34, archZ, 0.18, 0.92, 0.36, hullWhite, 0.15, 0.1, 0.26);
+    mb.pushBox(-cabW * 0.86, archY - 0.34, archZ, 0.18, 0.92, 0.36, hullWhite, 0.15, 0.1, 0.26);
+    mb.pushBox(0, archY + 0.1, archZ - 0.16, cabW * 1.92, 0.16, 0.52, hullWhite, 0.15, 0.12);
+    // 卫星雷达圆盘
+    mb.pushCylinder(0, archY + 0.30, archZ - 0.14, 0.34, 0.38, 0.20, 12, hullWhite, 0.18, 0.05);
+
+    // 4. 船尾休憩沙发与驾驶位座椅
+    mb.pushBox(0, 1.05, -3.1 * lenScale, 2.35 * beamScale, 0.38, 0.76, seatCream, 0.68, 0.0);
+    mb.pushBox(0, 1.32, -3.42 * lenScale, 2.35 * beamScale, 0.36, 0.18, seatCream, 0.68, 0.0);
+    // 前甲板日光浴软垫
+    mb.pushBox(0, 1.12, 2.85 * lenScale, 1.35 * beamScale, 0.14, 1.75 * lenScale, seatCream, 0.65, 0.0);
+
+    // 5. 双舷外高性能 V8 涡轮推进器（Outboard Engines）
+    for (const side of [-0.62, 0.62]) {
+      mb.pushBox(side, 0.62, s0[0] - 0.78, 0.44, 0.88, 0.66, darkCarbon, 0.20, 0.38);
+      mb.pushBox(side, 0.74, s0[0] - 0.76, 0.46, 0.12, 0.68, hullStripe, 0.18, 0.45);
+      // 下方螺旋桨传动腿
+      mb.pushBox(side, -0.18, s0[0] - 0.72, 0.16, 0.84, 0.34, chromeCol, 0.22, 0.82);
+    }
+
+    // 6. 船首不锈钢护栏与自发光航行灯（左红右绿顶白）
+    for (const side of [-1, 1]) {
+      mb.pushBox(side * 0.72 * beamScale, 1.34, 3.6 * lenScale, 0.05, 0.05, 2.8 * lenScale, chromeCol, 0.15, 0.92, -0.04);
+      mb.pushBox(side * 0.95 * beamScale, 1.22, 2.5 * lenScale, 0.05, 0.28, 0.05, chromeCol, 0.15, 0.92);
+    }
+    // 左舷红灯 (+X)，右舷绿灯 (-X)，桅顶白灯
+    mb.pushBox( cabW * 0.96, 1.32, cabZ + 0.55, 0.16, 0.14, 0.22, [1.0, 0.15, 0.15], 0.1, 2.0);
+    mb.pushBox(-cabW * 0.96, 1.32, cabZ + 0.55, 0.16, 0.14, 0.22, [0.12, 1.0, 0.42], 0.1, 2.0);
+    mb.pushBox(0, archY + 0.52, archZ - 0.14, 0.14, 0.14, 0.14, [1.0, 0.98, 0.86], 0.1, 2.0);
+
+    return mb.buildVAO();
+  }
+
+  // 构建热带海岛网格
+  function createIslandGeometry() {
+    const mb = new MeshBuilder();
+    const sandCol = [0.88, 0.80, 0.58];
+    const rockCol = [0.34, 0.36, 0.38];
+    const grassCol = [0.14, 0.48, 0.24];
+    const trunkCol = [0.42, 0.28, 0.16];
+    const leafCol = [0.12, 0.56, 0.22];
+
+    // 沙滩底座与绿色火山丘
+    mb.pushCylinder(0, -1.5, 0, 22, 34, 6.5, 16, sandCol, 0.88, 0.0);
+    mb.pushCylinder(2, 4.5, -1, 12, 21, 9.5, 14, grassCol, 0.82, 0.0);
+    mb.pushCylinder(-5, 3.0, 5, 7, 13, 8.0, 10, rockCol, 0.90, 0.0);
+    mb.pushCylinder(3, 11.5, -2, 3.5, 11.5, 7.5, 12, grassCol, 0.84, 0.0);
+
+    // 岛上 4 棵简约热带棕榈树
+    const palms = [[6, 8.8, 3], [-4, 6.5, -7], [11, 2.2, 6], [-9, 2.0, -3]];
+    for (const [px, py, pz] of palms) {
+      mb.pushCylinder(px, py + 3.2, pz, 0.26, 0.42, 6.6, 6, trunkCol, 0.9, 0.0);
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * TWO_PI;
+        mb.pushBox(px + Math.cos(a) * 1.4, py + 6.4, pz + Math.sin(a) * 1.4, 2.6, 0.28, 0.9, leafCol, 0.75, 0.0);
+      }
+    }
+    return mb.buildVAO();
+  }
+
+  // 构建海上灯塔网格
+  function createLighthouseGeometry() {
+    const mb = new MeshBuilder();
+    const stone = [0.42, 0.44, 0.46];
+    const red = [0.88, 0.18, 0.16];
+    const white = [0.95, 0.96, 0.98];
+    mb.pushCylinder(0, 0.0, 0, 7.5, 11.0, 5.5, 12, stone, 0.88, 0.0);
+    mb.pushCylinder(0, 6.0, 0, 3.3, 4.0, 6.5, 12, white, 0.45, 0.0);
+    mb.pushCylinder(0, 12.2, 0, 2.7, 3.3, 6.2, 12, red, 0.45, 0.0);
+    mb.pushCylinder(0, 18.0, 0, 2.2, 2.7, 5.6, 12, white, 0.45, 0.0);
+    mb.pushCylinder(0, 21.6, 0, 2.9, 2.6, 1.4, 12, [0.16, 0.18, 0.22], 0.35, 0.5);
+    // 自发光灯塔强光源
+    mb.pushCylinder(0, 23.6, 0, 1.7, 1.7, 2.8, 12, [1.0, 0.94, 0.62], 0.08, 2.2);
+    mb.pushCylinder(0, 26.2, 0, 0.2, 2.4, 2.6, 12, red, 0.35, 0.1);
+    return mb.buildVAO();
+  }
+
+  // 构建加速航道门/海上浮标网格
+  function createBoostGateGeometry() {
+    const mb = new MeshBuilder();
+    const frameCol = [0.14, 0.20, 0.28];
+    const glowCyan = [0.12, 0.95, 1.0];
+    const glowGold = [1.0, 0.84, 0.20];
+    for (const s of [-9.5, 9.5]) {
+      mb.pushCylinder(s, 0.6, 0, 1.35, 1.65, 3.6, 10, frameCol, 0.35, 0.3);
+      mb.pushBox(s, 5.2, 0, 0.9, 7.8, 0.9, frameCol, 0.3, 0.4);
+      mb.pushBox(s, 5.2, 0, 0.42, 7.2, 1.05, glowCyan, 0.1, 2.1);
+    }
+    mb.pushBox(0, 9.2, 0, 20.0, 1.1, 1.1, frameCol, 0.28, 0.45);
+    mb.pushBox(0, 9.2, 0, 18.4, 0.46, 1.24, glowGold, 0.1, 2.2);
+    return mb.buildVAO();
+  }
+
+  const Meshes = {
+    yachtPlayer: createYachtGeometry('flagship'),
+    yachtRacer: createYachtGeometry('racer'),
+    yachtSuper: createYachtGeometry('super'),
+    island: createIslandGeometry(),
+    lighthouse: createLighthouseGeometry(),
+    gate: createBoostGateGeometry()
+  };
+
+  // =========================================================================
+  // 7. 纯 Web Audio API 程序化声场引擎（V8 双机 + 劈水声 + 海浪 + 撞击 + 汽笛）
+  // =========================================================================
+  const SoundEngine = {
+    ctx: null,
+    enabled: true,
+    ready: false,
+    masterGain: null,
+    engOsc1: null,
+    engOsc2: null,
+    engSub: null,
+    engFilter: null,
+    engGain: null,
+    turboOsc: null,
+    turboGain: null,
+    waterFilter: null,
+    waterGain: null,
+    oceanFilter: null,
+    oceanGain: null,
+    noiseBuf: null,
+
+    init() {
+      if (this.ready) {
+        if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+        return;
+      }
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      const ctx = new AC();
+      this.ctx = ctx;
+
+      const master = ctx.createGain();
+      master.gain.value = this.enabled ? 0.55 : 0.0;
+      master.connect(ctx.destination);
+      this.masterGain = master;
+
+      // 生成 3 秒无缝立体声白噪声缓存（供海浪/劈水/砸浪/撞击复用）
+      const sr = ctx.sampleRate;
+      const buf = ctx.createBuffer(2, sr * 3, sr);
+      for (let ch = 0; ch < 2; ch++) {
+        const d = buf.getChannelData(ch);
+        let b0 = 0, b1 = 0, b2 = 0;
+        for (let i = 0; i < d.length; i++) {
+          const w = Math.random() * 2 - 1;
+          b0 = 0.997 * b0 + w * 0.029;
+          b1 = 0.985 * b1 + w * 0.052;
+          b2 = 0.950 * b2 + w * 0.120;
+          d[i] = Math3D.clamp((b0 + b1 + b2 + w * 0.24) * 0.65, -1, 1);
+        }
+      }
+      this.noiseBuf = buf;
+
+      // 1) 双 V8 舷外引擎合成器
+      const engFilter = ctx.createBiquadFilter();
+      engFilter.type = 'lowpass';
+      engFilter.frequency.value = 180;
+      engFilter.Q.value = 3.2;
+
+      const engGain = ctx.createGain();
+      engGain.gain.value = 0.14;
+      engFilter.connect(engGain);
+      engGain.connect(master);
+
+      const osc1 = ctx.createOscillator();
+      osc1.type = 'sawtooth';
+      osc1.frequency.value = 42;
+
+      const osc2 = ctx.createOscillator();
+      osc2.type = 'triangle';
+      osc2.frequency.value = 84.6;
+
+      const oscSub = ctx.createOscillator();
+      oscSub.type = 'sine';
+      oscSub.frequency.value = 21;
+
+      const subGain = ctx.createGain();
+      subGain.gain.value = 0.55;
+      osc1.connect(engFilter);
+      osc2.connect(engFilter);
+      oscSub.connect(subGain);
+      subGain.connect(engFilter);
+
+      osc1.start(); osc2.start(); oscSub.start();
+      this.engOsc1 = osc1; this.engOsc2 = osc2; this.engSub = oscSub;
+      this.engFilter = engFilter; this.engGain = engGain;
+
+      // 2) 涡轮增压高频啸叫
+      const turboOsc = ctx.createOscillator();
+      turboOsc.type = 'sine';
+      turboOsc.frequency.value = 620;
+      const turboGain = ctx.createGain();
+      turboGain.gain.value = 0.0;
+      turboOsc.connect(turboGain);
+      turboGain.connect(master);
+      turboOsc.start();
+      this.turboOsc = turboOsc;
+      this.turboGain = turboGain;
+
+      // 3) 高速船底劈水与白沫撕裂声
+      const waterSrc = ctx.createBufferSource();
+      waterSrc.buffer = buf;
+      waterSrc.loop = true;
+      const waterFilter = ctx.createBiquadFilter();
+      waterFilter.type = 'bandpass';
+      waterFilter.frequency.value = 950;
+      waterFilter.Q.value = 0.7;
+      const waterGain = ctx.createGain();
+      waterGain.gain.value = 0.02;
+      waterSrc.connect(waterFilter);
+      waterFilter.connect(waterGain);
+      waterGain.connect(master);
+      waterSrc.start();
+      this.waterFilter = waterFilter;
+      this.waterGain = waterGain;
+
+      // 4) 远景海风与浪涌氛围声
+      const oceanSrc = ctx.createBufferSource();
+      oceanSrc.buffer = buf;
+      oceanSrc.loop = true;
+      const oceanFilter = ctx.createBiquadFilter();
+      oceanFilter.type = 'lowpass';
+      oceanFilter.frequency.value = 340;
+      const oceanGain = ctx.createGain();
+      oceanGain.gain.value = 0.12;
+      oceanSrc.connect(oceanFilter);
+      oceanFilter.connect(oceanGain);
+      oceanGain.connect(master);
+      oceanSrc.start();
+      this.oceanFilter = oceanFilter;
+      this.oceanGain = oceanGain;
+
+      this.ready = true;
+    },
+
+    setMuted(muted) {
+      this.enabled = !muted;
+      if (this.masterGain && this.ctx) {
+        this.masterGain.gain.setTargetAtTime(this.enabled ? 0.55 : 0.0, this.ctx.currentTime, 0.05);
+      }
+    },
+
+    update(speedMs, throttleAbs, nitroActive, airborne, windSpeed) {
+      if (!this.ready || !this.ctx || !this.enabled) return;
+      const now = this.ctx.currentTime;
+      const spdNorm = Math3D.clamp(speedMs / 34, 0, 1.35);
+      const load = Math3D.clamp(throttleAbs * 0.65 + spdNorm * 0.55 + (nitroActive ? 0.35 : 0), 0, 1.4);
+
+      const baseFreq = 36 + load * 78 + (airborne ? 18 : 0);
+      this.engOsc1.frequency.setTargetAtTime(baseFreq, now, 0.06);
+      this.engOsc2.frequency.setTargetAtTime(baseFreq * 1.995, now, 0.06);
+      this.engSub.frequency.setTargetAtTime(baseFreq * 0.5, now, 0.06);
+      this.engFilter.frequency.setTargetAtTime(170 + load * 680 + (nitroActive ? 360 : 0), now, 0.08);
+      this.engGain.gain.setTargetAtTime(0.11 + load * 0.16, now, 0.08);
+
+      // 涡轮氮气声
+      this.turboOsc.frequency.setTargetAtTime(720 + spdNorm * 950 + (nitroActive ? 420 : 0), now, 0.08);
+      this.turboGain.gain.setTargetAtTime(nitroActive ? 0.055 : 0.0, now, 0.08);
+
+      // 船底劈水声（离水腾空时瞬间减弱，增强真实感！）
+      const waterLevel = airborne ? 0.01 : Math3D.clamp(spdNorm * 0.38, 0.015, 0.42);
+      this.waterGain.gain.setTargetAtTime(waterLevel, now, 0.07);
+      this.waterFilter.frequency.setTargetAtTime(650 + spdNorm * 1450, now, 0.08);
+
+      // 海风海浪氛围
+      const windNorm = Math3D.clamp(windSpeed / 22, 0.2, 1.2);
+      this.oceanGain.gain.setTargetAtTime(0.08 + windNorm * 0.16, now, 0.25);
+      this.oceanFilter.frequency.setTargetAtTime(260 + windNorm * 420, now, 0.25);
+    },
+
+    // 砸浪入水轰鸣声
+    playSplash(intensity = 0.7) {
+      if (!this.ready || !this.ctx || !this.enabled || !this.noiseBuf) return;
+      const ctx = this.ctx;
+      const now = ctx.currentTime;
+      const src = ctx.createBufferSource();
+      src.buffer = this.noiseBuf;
+      const flt = ctx.createBiquadFilter();
+      flt.type = 'bandpass';
+      flt.frequency.setValueAtTime(520 + intensity * 480, now);
+      flt.frequency.exponentialRampToValueAtTime(160, now + 0.55);
+      flt.Q.value = 0.85;
+      const g = ctx.createGain();
+      const vol = Math3D.clamp(intensity * 0.48, 0.08, 0.55);
+      g.gain.setValueAtTime(0.001, now);
+      g.gain.linearRampToValueAtTime(vol, now + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+      src.connect(flt); flt.connect(g); g.connect(this.masterGain);
+      src.start(now, Math.random() * 1.5, 0.72);
+    },
+
+    // 刚体船体撞击音效
+    playCrash(intensity = 1.0) {
+      if (!this.ready || !this.ctx || !this.enabled) return;
+      const ctx = this.ctx;
+      const now = ctx.currentTime;
+      // 低频闷击
+      const osc = ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(135, now);
+      osc.frequency.exponentialRampToValueAtTime(34, now + 0.34);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(Math3D.clamp(intensity * 0.65, 0.15, 0.75), now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+      osc.connect(g); g.connect(this.masterGain);
+      osc.start(now); osc.stop(now + 0.4);
+      // 叠加撞击飞溅水幕声
+      this.playSplash(Math.min(1.2, intensity * 1.1));
+    },
+
+    // 双音游艇低沉铜管汽笛
+    playHorn() {
+      if (!this.ready || !this.ctx || !this.enabled) return;
+      const ctx = this.ctx;
+      const now = ctx.currentTime;
+      const freqs = [196.0, 246.94]; // G3 + B3 经典海事双音笛
+      for (const f of freqs) {
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(f, now);
+        const flt = ctx.createBiquadFilter();
+        flt.type = 'lowpass';
+        flt.frequency.value = 720;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.001, now);
+        g.gain.linearRampToValueAtTime(0.16, now + 0.06);
+        g.gain.setValueAtTime(0.15, now + 0.58);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.92);
+        osc.connect(flt); flt.connect(g); g.connect(this.masterGain);
+        osc.start(now); osc.stop(now + 0.95);
+      }
+    },
+
+    // 穿过海上加速门和弦音效
+    playGateChime() {
+      if (!this.ready || !this.ctx || !this.enabled) return;
+      const ctx = this.ctx;
+      const now = ctx.currentTime;
+      const notes = [523.25, 659.25, 783.99, 1046.5];
+      notes.forEach((f, idx) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = f;
+        const g = ctx.createGain();
+        const t0 = now + idx * 0.055;
+        g.gain.setValueAtTime(0.001, t0);
+        g.gain.linearRampToValueAtTime(0.14, t0 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.45);
+        osc.connect(g); g.connect(this.masterGain);
+        osc.start(t0); osc.stop(t0 + 0.48);
+      });
+    }
+  };
+
+  // =========================================================================
+  // 8. 2800 粒子 3D 弹道水花与浪沫系统 (含重力、风漂、水面落回)
+  // =========================================================================
+  const SpraySystem = (() => {
+    const MAX = 2800;
+    const px = new Float32Array(MAX);
+    const py = new Float32Array(MAX);
+    const pz = new Float32Array(MAX);
+    const vx = new Float32Array(MAX);
+    const vy = new Float32Array(MAX);
+    const vz = new Float32Array(MAX);
+    const life = new Float32Array(MAX);
+    const maxLife = new Float32Array(MAX);
+    const size = new Float32Array(MAX);
+    const growth = new Float32Array(MAX);
+    const type = new Float32Array(MAX);
+    const gpuBuf = new Float32Array(MAX * 6);
+    let cursor = 0;
+    let activeCount = 0;
+
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    const vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, gpuBuf.byteLength, gl.DYNAMIC_DRAW);
+    const stride = 6 * 4;
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride, 0);
+    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, stride, 12);
+    gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 1, gl.FLOAT, false, stride, 16);
+    gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, stride, 20);
+    gl.bindVertexArray(null);
+
+    function spawn(x, y, z, ivx, ivy, ivz, s, g, ml, t = 0) {
+      const i = cursor;
+      cursor = (cursor + 1) % MAX;
+      px[i] = x; py[i] = y; pz[i] = z;
+      vx[i] = ivx; vy[i] = ivy; vz[i] = ivz;
+      size[i] = s; growth[i] = g;
+      life[i] = ml; maxLife[i] = ml;
+      type[i] = t;
+    }
+
+    return {
+      // 船首双侧劈浪水幕
+      emitBowSpray(x, y, z, fwdX, fwdZ, rightX, rightZ, boatVx, boatVz, speed, intensity) {
+        const count = Math.min(10, Math.floor(2 + intensity * 6));
+        for (let i = 0; i < count; i++) {
+          const side = (i & 1) ? 1 : -1;
+          const outSpd = (2.8 + Math.random() * 4.8) * (0.55 + intensity * 0.7);
+          const upSpd = (2.2 + Math.random() * 4.2) * (0.5 + intensity * 0.72);
+          const ox = x + rightX * side * (0.65 + Math.random() * 0.7) + fwdX * (Math.random() * 1.4 - 0.6);
+          const oz = z + rightZ * side * (0.65 + Math.random() * 0.7) + fwdZ * (Math.random() * 1.4 - 0.6);
+          spawn(
+            ox, y + Math.random() * 0.35, oz,
+            boatVx * 0.42 + rightX * side * outSpd - fwdX * (Math.random() * 2.5),
+            upSpd,
+            boatVz * 0.42 + rightZ * side * outSpd - fwdZ * (Math.random() * 2.5),
+            0.65 + Math.random() * 0.75,
+            1.45,
+            0.55 + Math.random() * 0.55,
+            0
+          );
+        }
+      },
+
+      // 船尾推进器喷射白水柱 (Roostertail) 与氮气光焰
+      emitRoostertail(x, y, z, fwdX, fwdZ, rightX, rightZ, speed, nitro) {
+        const count = nitro ? 7 : 4;
+        for (let i = 0; i < count; i++) {
+          const spread = (Math.random() - 0.5) * 1.45;
+          const backSpd = 4.5 + speed * 0.28 + Math.random() * 3.5;
+          const upSpd = 1.6 + speed * 0.14 + Math.random() * 2.2 + (nitro ? 1.8 : 0);
+          spawn(
+            x + rightX * spread * 0.65,
+            y + 0.1 + Math.random() * 0.25,
+            z + rightZ * spread * 0.65,
+            -fwdX * backSpd + rightX * spread * 2.2,
+            upSpd,
+            -fwdZ * backSpd + rightZ * spread * 2.2,
+            nitro ? (0.9 + Math.random() * 0.8) : (0.7 + Math.random() * 0.65),
+            1.6,
+            0.48 + Math.random() * 0.46,
+            (nitro && i < 2) ? 1 : 0
+          );
+        }
+      },
+
+      // 腾空砸水巨型环形水花
+      emitSlamSplash(x, y, z, strength) {
+        const count = Math.min(72, Math.floor(20 + strength * 32));
+        for (let i = 0; i < count; i++) {
+          const ang = Math.random() * TWO_PI;
+          const rad = 1.4 + Math.random() * 2.4;
+          const spd = (3.5 + Math.random() * 7.5) * strength;
+          spawn(
+            x + Math.cos(ang) * rad,
+            y + 0.25,
+            z + Math.sin(ang) * rad,
+            Math.cos(ang) * spd,
+            (4.2 + Math.random() * 6.8) * strength,
+            Math.sin(ang) * spd,
+            1.15 + Math.random() * 1.35,
+            2.1,
+            0.75 + Math.random() * 0.65,
+            0
+          );
+        }
+      },
+
+      // 游艇撞击巨浪+金属火花炸裂
+      emitCollisionBurst(x, y, z, intensity) {
+        const count = Math.min(95, Math.floor(32 + intensity * 48));
+        for (let i = 0; i < count; i++) {
+          const ang = Math.random() * TWO_PI;
+          const isSpark = i < 22;
+          const spd = (isSpark ? 7.5 : 4.5) + Math.random() * 9.5 * intensity;
+          spawn(
+            x + (Math.random() - 0.5) * 2.0,
+            y + (isSpark ? 0.9 : 0.35),
+            z + (Math.random() - 0.5) * 2.0,
+            Math.cos(ang) * spd,
+            (isSpark ? 5.2 : 4.8) + Math.random() * 8.2 * intensity,
+            Math.sin(ang) * spd,
+            isSpark ? (0.35 + Math.random() * 0.35) : (1.2 + Math.random() * 1.6),
+            isSpark ? -0.35 : 2.3,
+            isSpark ? (0.35 + Math.random() * 0.35) : (0.85 + Math.random() * 0.7),
+            isSpark ? 2 : 0
+          );
+        }
+      },
+
+      shiftOrigin(dx, dz) {
+        for (let i = 0; i < MAX; i++) {
+          if (life[i] > 0) {
+            px[i] -= dx;
+            pz[i] -= dz;
+          }
+        }
+      },
+
+      update(dt) {
+        const windX = OceanState.wavesFlat[0] * OceanState.windSpeed * 0.22;
+        const windZ = OceanState.wavesFlat[1] * OceanState.windSpeed * 0.22;
+        const drag = Math.exp(-dt * 1.45);
+        let ptr = 0;
+        let cnt = 0;
+
+        for (let i = 0; i < MAX; i++) {
+          let l = life[i];
+          if (l <= 0) continue;
+          l -= dt;
+          life[i] = l;
+          if (l <= 0) continue;
+
+          vy[i] -= GRAVITY * (type[i] > 1.5 ? 1.15 : 0.88) * dt;
+          vx[i] = vx[i] * drag + windX * dt;
+          vz[i] = vz[i] * drag + windZ * dt;
+
+          px[i] += vx[i] * dt;
+          py[i] += vy[i] * dt;
+          pz[i] += vz[i] * dt;
+          size[i] = Math.max(0.15, size[i] + growth[i] * dt);
+
+          const ratio = l / maxLife[i];
+          // 柔和淡入与平滑消散
+          const alpha = Math.min(1, (1 - ratio) * 7.5) * Math.pow(ratio, 1.15) * (type[i] > 0.5 ? 0.92 : 0.72);
+
+          gpuBuf[ptr++] = px[i];
+          gpuBuf[ptr++] = py[i];
+          gpuBuf[ptr++] = pz[i];
+          gpuBuf[ptr++] = size[i];
+          gpuBuf[ptr++] = alpha;
+          gpuBuf[ptr++] = type[i];
+          cnt++;
+        }
+        activeCount = cnt;
+      },
+
+      render(viewProj, camPos, viewportH) {
+        if (activeCount === 0) return;
+        const pr = Programs.particle;
+        gl.useProgram(pr.p);
+        gl.uniformMatrix4fv(pr.u.uViewProj, false, viewProj);
+        gl.uniform3fv(pr.u.uCamPos, camPos);
+        gl.uniform1f(pr.u.uViewportH, viewportH);
+        gl.uniform3fv(pr.u.uSunColor, OceanState.sunColor);
+        gl.uniform3fv(pr.u.uSkyHorizon, OceanState.skyHorizon);
+
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.depthMask(false);
+
+        gl.bindVertexArray(vao);
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, gpuBuf.subarray(0, activeCount * 6));
+        gl.drawArrays(gl.POINTS, 0, activeCount);
+
+        gl.bindVertexArray(null);
+        gl.depthMask(true);
+        gl.disable(gl.BLEND);
+      }
+    };
+  })();
+
+  // =========================================================================
+  // 9. 物理开尔文尾流带引擎 (V 型 19.47° 扩散泡沫带，紧贴 6 层波面)
+  // =========================================================================
+  class WakeRibbon {
+    constructor(maxNodes = 44) {
+      this.maxNodes = maxNodes;
+      this.nodes = [];
+      this.distAccum = 0;
+      this.uvDist = 0;
+      this.lastX = 0;
+      this.lastZ = 0;
+      this.inited = false;
+      this.vertData = new Float32Array(maxNodes * 2 * 6);
+      this.vao = gl.createVertexArray();
+      gl.bindVertexArray(this.vao);
+      this.vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, this.vertData.byteLength, gl.DYNAMIC_DRAW);
+      const stride = 6 * 4;
+      gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride, 0);
+      gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, stride, 12);
+      gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 1, gl.FLOAT, false, stride, 20);
+      gl.bindVertexArray(null);
+    }
+
+    shiftOrigin(dx, dz) {
+      this.lastX -= dx;
+      this.lastZ -= dz;
+      for (let i = 0; i < this.nodes.length; i++) {
+        this.nodes[i].x -= dx;
+        this.nodes[i].z -= dz;
+      }
+    }
+
+    update(dt, sternX, sternZ, rightX, rightZ, speed, airborne) {
+      if (!this.inited) {
+        this.lastX = sternX; this.lastZ = sternZ; this.inited = true;
+      }
+      const stepDist = Math.hypot(sternX - this.lastX, sternZ - this.lastZ);
+      this.distAccum += stepDist;
+      this.lastX = sternX; this.lastZ = sternZ;
+
+      if (this.distAccum > 1.85 && speed > 2.2) {
+        this.uvDist += this.distAccum;
+        this.distAccum = 0;
+        this.nodes.unshift({
+          x: sternX,
+          z: sternZ,
+          rx: rightX,
+          rz: rightZ,
+          age: 0,
+          maxAge: 3.4 + Math.min(2.6, speed * 0.08),
+          halfWidth: 1.55,
+          strength: airborne ? 0.05 : Math3D.clamp((speed - 2.0) / 14.0, 0.15, 1.0),
+          v: this.uvDist
+        });
+        if (this.nodes.length > this.maxNodes) this.nodes.pop();
+      }
+
+      // 更新尾流节点年龄并按开尔文 19.47° (tan ≈ 0.353) 自然扩散
+      for (let i = this.nodes.length - 1; i >= 0; i--) {
+        const n = this.nodes[i];
+        n.age += dt;
+        n.halfWidth += (1.75 + n.strength * 2.2) * dt;
+        if (n.age >= n.maxAge) this.nodes.splice(i, 1);
+      }
+    }
+
+    render() {
+      const len = this.nodes.length;
+      if (len < 2) return;
+      const sampleOut = { y: 0, nx: 0, ny: 1, nz: 0, vy: 0, foam: 0 };
+      let ptr = 0;
+      for (let i = 0; i < len; i++) {
+        const n = this.nodes[i];
+        const fade = Math.pow(1.0 - n.age / n.maxAge, 1.35) * n.strength;
+        const lx = n.x + n.rx * n.halfWidth;
+        const lz = n.z + n.rz * n.halfWidth;
+        const rx = n.x - n.rx * n.halfWidth;
+        const rz = n.z - n.rz * n.halfWidth;
+
+        OceanState.sample(lx, lz, sampleOut);
+        const ly = sampleOut.y + 0.14;
+        OceanState.sample(rx, rz, sampleOut);
+        const ry = sampleOut.y + 0.14;
+
+        this.vertData[ptr++] = lx; this.vertData[ptr++] = ly; this.vertData[ptr++] = lz;
+        this.vertData[ptr++] = 0.0; this.vertData[ptr++] = n.v;
+        this.vertData[ptr++] = fade;
+
+        this.vertData[ptr++] = rx; this.vertData[ptr++] = ry; this.vertData[ptr++] = rz;
+        this.vertData[ptr++] = 1.0; this.vertData[ptr++] = n.v;
+        this.vertData[ptr++] = fade;
+      }
+
+      gl.bindVertexArray(this.vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.vertData.subarray(0, len * 2 * 6));
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, len * 2);
+      gl.bindVertexArray(null);
+    }
+  }
+  // =========================================================================
+  // 10. 五点浮力 6-DOF 拟真游艇动力学引擎 (玩家与 AI 共用核心物理)
+  // =========================================================================
+  const _sampleTmp = { y: 0, nx: 0, ny: 1, nz: 0, vy: 0, foam: 0 };
+
+  class Yacht {
+    constructor(opts) {
+      this.id = opts.id;
+      this.name = opts.name || 'YACHT';
+      this.isPlayer = !!opts.isPlayer;
+      this.role = opts.role || 'cruiser'; // 'player' | 'chaser' | 'racer' | 'cruiser'
+      this.mesh = opts.mesh || Meshes.yachtPlayer;
+      this.tint = new Float32Array(opts.tint || [1.0, 1.0, 1.0]);
+      this.scale = opts.scale || 1.0;
+
+      // 空间状态与速度
+      this.x = opts.x || 0;
+      this.y = opts.y || 0.2;
+      this.z = opts.z || 0;
+      this.vx = 0;
+      this.vy = 0;
+      this.vz = 0;
+
+      // 姿态角 (yaw=0 朝向 +Z; +X 为左舷 Port, -X 为右舷 Starboard)
+      this.yaw = opts.yaw || 0;
+      this.pitch = 0;
+      this.roll = 0;
+      this.yawRate = 0;
+      this.pitchRate = 0;
+      this.rollRate = 0;
+
+      // 动力与物理参数
+      this.maxSpeed = opts.maxSpeed || 31.0; // m/s (约 60 节)
+      this.accel = opts.accel || 16.5;
+      this.turnPower = opts.turnPower || 1.85;
+      this.mass = opts.mass || (this.scale * this.scale * 2.2);
+      this.radius = 2.65 * this.scale;
+      this.halfLen = 4.6 * this.scale;
+      this.halfBeam = 1.65 * this.scale;
+
+      // 操控输入状态
+      this.throttle = 0; // -0.55 ~ 1.0
+      this.steer = 0;    // -1 (左舵) ~ +1 (右舵)
+      this.nitro = 100;
+      this.nitroActive = false;
+
+      // 流体实时遥测
+      this.speed = 0;
+      this.forwardSpeed = 0;
+      this.airborne = false;
+      this.airTime = 0;
+      this.hitCooldown = 0;
+      this.rpm = 800;
+
+      // AI 专属导航状态
+      this.aiAngle = Math.random() * TWO_PI;
+      this.aiTimer = 1 + Math.random() * 4;
+      this.aiSpeedFactor = 0.72 + Math.random() * 0.28;
+
+      this.wake = new WakeRibbon(this.isPlayer ? 52 : 28);
+      this.modelMat = Math3D.mat4Create();
+    }
+
+    getForward() {
+      return [Math.sin(this.yaw), Math.cos(this.yaw)];
+    }
+
+    // 右舷(Starboard)单位向量：-X 经 yaw 旋转
+    getRight() {
+      return [-Math.cos(this.yaw), Math.sin(this.yaw)];
+    }
+
+    shiftOrigin(dx, dz) {
+      this.x -= dx;
+      this.z -= dz;
+      this.wake.shiftOrigin(dx, dz);
+    }
+
+    update(dt, time) {
+      if (this.hitCooldown > 0) this.hitCooldown -= dt;
+
+      const sinY = Math.sin(this.yaw);
+      const cosY = Math.cos(this.yaw);
+      // 船首 +Z 方向 (sinY, cosY)，左舷 +X 方向 (cosY, -sinY)
+      const fwdX = sinY, fwdZ = cosY;
+      const portX = cosY, portZ = -sinY;
+
+      // 1) 五点波面采样：船首、船舯左/右、船尾左/右
+      const hl = this.halfLen;
+      const hb = this.halfBeam;
+
+      OceanState.sample(this.x + fwdX * hl, this.z + fwdZ * hl, _sampleTmp);
+      const hBow = _sampleTmp.y;
+      const vyBow = _sampleTmp.vy;
+
+      OceanState.sample(this.x + portX * hb, this.z + portZ * hb, _sampleTmp);
+      const hMidL = _sampleTmp.y;
+      OceanState.sample(this.x - portX * hb, this.z - portZ * hb, _sampleTmp);
+      const hMidR = _sampleTmp.y;
+
+      OceanState.sample(this.x - fwdX * hl * 0.9 + portX * hb * 0.8, this.z - fwdZ * hl * 0.9 + portZ * hb * 0.8, _sampleTmp);
+      const hSternL = _sampleTmp.y;
+      OceanState.sample(this.x - fwdX * hl * 0.9 - portX * hb * 0.8, this.z - fwdZ * hl * 0.9 - portZ * hb * 0.8, _sampleTmp);
+      const hSternR = _sampleTmp.y;
+
+      const hStern = (hSternL + hSternR) * 0.5;
+      const hLeft = (hMidL + hSternL) * 0.5;
+      const hRight = (hMidR + hSternR) * 0.5;
+      const waterCenter = hBow * 0.28 + hMidL * 0.18 + hMidR * 0.18 + hSternL * 0.18 + hSternR * 0.18;
+
+      // 2) 氮气与推力计算
+      const canNitro = this.nitroActive && this.nitro > 1.5 && this.throttle > 0.15;
+      if (canNitro) {
+        this.nitro = Math.max(0, this.nitro - 24 * dt);
+      } else {
+        this.nitroActive = false;
+        this.nitro = Math.min(100, this.nitro + (7.5 + (this.speed > 12 ? 3.5 : 0)) * dt);
+      }
+
+      const fwdSpeed = this.vx * fwdX + this.vz * fwdZ;
+      const latSpeed = this.vx * portX + this.vz * portZ;
+      this.forwardSpeed = fwdSpeed;
+
+      // 吃水深度（>0 表示浸在水中，<0 表示腾空离水）
+      const submerge = (waterCenter + 0.12) - this.y;
+      const inWater = submerge > -0.35;
+      const wasAirborne = this.airborne;
+      this.airborne = !inWater;
+
+      if (this.airborne) {
+        this.airTime += dt;
+      } else {
+        // 检测腾空重砸入水（Wave Slamming）
+        if (wasAirborne && this.airTime > 0.24 && this.vy < -2.4) {
+          const slamPower = Math3D.clamp(Math.abs(this.vy) / 9.5, 0.35, 1.45);
+          SpraySystem.emitSlamSplash(this.x, waterCenter, this.z, slamPower);
+          if (this.isPlayer) {
+            SoundEngine.playSplash(slamPower);
+            CameraSystem.addShake(slamPower * 0.55);
+            if (navigator.vibrate) navigator.vibrate(Math.floor(slamPower * 55));
+            if (this.airTime > 0.65) {
+              const pts = Math.round(this.airTime * 180);
+              GameState.addScore(pts, `🌊 飞跃巨浪 +${pts}`);
+            }
+          }
+        }
+        this.airTime = 0;
+      }
+
+      // 3) 垂直浮力 + 滑行升力 + 重力
+      if (inWater) {
+        const subClamped = Math3D.clamp(submerge + 0.35, 0, 2.6);
+        const planingLift = Math3D.clamp(Math.abs(fwdSpeed) / 26, 0, 1) * 0.38;
+        const targetY = waterCenter + planingLift;
+        const springF = (targetY - this.y) * 24.0;
+        const dampF = (vyBow * 0.35 - this.vy) * 5.2;
+        this.vy += (springF + dampF) * dt;
+        // 高速冲上大浪峰时给予自然起跳垂向冲量
+        if (fwdSpeed > 15 && hBow > hStern + 0.55 && subClamped < 0.75) {
+          this.vy += Math.min(8.5, (hBow - hStern) * fwdSpeed * 0.16) * dt * 10;
+        }
+      } else {
+        this.vy -= GRAVITY * 1.05 * dt;
+      }
+      this.y += this.vy * dt;
+
+      // 4) 推进力、流体阻力与高速漂移侧滑
+      const waterGrip = inWater ? 1.0 : 0.12;
+      const boostMul = canNitro ? 1.58 : 1.0;
+      const thrust = this.throttle * this.accel * boostMul * waterGrip;
+
+      // 纵向速度更新 + 二次方水阻
+      let nextFwd = fwdSpeed + thrust * dt;
+      const maxSpd = this.maxSpeed * (canNitro ? 1.38 : 1.0);
+      const dragCoeff = inWater ? (0.48 + Math.abs(nextFwd) / (maxSpd * 1.45)) : 0.08;
+      nextFwd *= Math.exp(-dragCoeff * dt);
+      nextFwd = Math3D.clamp(nextFwd, -maxSpd * 0.42, maxSpd * 1.15);
+
+      // 横向龙骨抗侧滑阻尼（保留适度尾甩漂移手感）
+      const latDrag = inWater ? 3.4 : 0.25;
+      const nextLat = latSpeed * Math.exp(-latDrag * dt);
+
+      this.vx = fwdX * nextFwd + portX * nextLat;
+      this.vz = fwdZ * nextFwd + portZ * nextLat;
+      this.x += this.vx * dt;
+      this.z += this.vz * dt;
+      this.speed = Math.hypot(this.vx, this.vz);
+
+      // 5) 舵效转向（右舵 steer > 0 => yaw 减小，朝右舷 -X 转向）
+      const steerAuth = Math3D.clamp(Math.abs(fwdSpeed) / 7.5, 0.22, 1.0) * (fwdSpeed < -0.5 ? -0.75 : 1.0);
+      const targetYawRate = -this.steer * this.turnPower * steerAuth * (inWater ? 1.0 : 0.28);
+      this.yawRate = Math3D.lerp(this.yawRate, targetYawRate, Math.min(1, dt * 6.5));
+      this.yaw += this.yawRate * dt;
+
+      // 6) 纵倾 Pitch 与横摇 Roll 弹簧阻尼解算
+      // 注意坐标约定：pitch < 0 船首抬起，roll > 0 左舷抬起/右舷压低（右转内倾）
+      const wavePitch = -Math.atan2(hBow - hStern, hl * 1.9);
+      const planingPitch = -Math3D.clamp(fwdSpeed / 28, 0, 1.2) * (canNitro ? 0.16 : 0.11);
+      const airPitch = this.airborne ? Math3D.clamp(-this.vy * 0.045, -0.34, 0.34) : 0;
+      const targetPitch = this.airborne ? airPitch : Math3D.clamp(wavePitch * 0.82 + planingPitch, -0.45, 0.42);
+
+      const waveRoll = Math.atan2(hLeft - hRight, hb * 2.0);
+      const bankRoll = this.steer * Math3D.clamp(fwdSpeed / 22, 0, 1.15) * 0.34;
+      const targetRoll = Math3D.clamp((this.airborne ? bankRoll * 0.7 : waveRoll * 0.78 + bankRoll), -0.58, 0.58);
+
+      const rotStiff = inWater ? 15.0 : 3.2;
+      const rotDamp = inWater ? 4.4 : 1.6;
+      this.pitchRate += ((targetPitch - this.pitch) * rotStiff - this.pitchRate * rotDamp) * dt;
+      this.rollRate += ((targetRoll - this.roll) * rotStiff - this.rollRate * rotDamp) * dt;
+      this.pitch += this.pitchRate * dt;
+      this.roll += this.rollRate * dt;
+
+      // 发动机转速模拟
+      const targetRpm = 780 + Math.abs(this.throttle) * 3200 + (this.speed / this.maxSpeed) * 2600 + (canNitro ? 1400 : 0);
+      this.rpm = Math3D.lerp(this.rpm, targetRpm, Math.min(1, dt * 5.0));
+
+      // 7) 实时发射 3D 水花粒子与更新开尔文尾流
+      const sternX = this.x - fwdX * hl * 0.98;
+      const sternZ = this.z - fwdZ * hl * 0.98;
+      this.wake.update(dt, sternX, sternZ, portX, portZ, this.speed, this.airborne);
+
+      // 仅对玩家及近距 AI 发射高密 3D 弹道水花，保证全端 60 FPS
+      const distToPlayer = this.isPlayer ? 0 : Math.hypot(this.x - player.x, this.z - player.z);
+      if (inWater && distToPlayer < 260) {
+        if (this.speed > 4.2) {
+          const bowX = this.x + fwdX * hl * 0.78;
+          const bowZ = this.z + fwdZ * hl * 0.78;
+          const sprayInt = Math3D.clamp((this.speed - 3.5) / 24, 0.15, 1.35) * (this.isPlayer ? 1.0 : 0.45);
+          if (Math.random() < (this.isPlayer ? 0.95 : 0.45)) {
+            SpraySystem.emitBowSpray(bowX, waterCenter + 0.12, bowZ, fwdX, fwdZ, portX, portZ, this.vx, this.vz, this.speed, sprayInt);
+          }
+          if (Math.random() < (this.isPlayer ? 0.92 : 0.35)) {
+            SpraySystem.emitRoostertail(sternX, waterCenter + 0.08, sternZ, fwdX, fwdZ, portX, portZ, this.speed, canNitro);
+          }
+        }
+      }
+
+      // 8) 更新 3D 模型矩阵
+      Math3D.mat4FromTRS(this.modelMat, this.x, this.y, this.z, this.yaw, this.pitch, this.roll, this.scale, this.scale, this.scale);
+    }
+  }
+
+  // =========================================================================
+  // 11. 无限海域程序化地标流式加载 + 浮动原点管理 (WorldManager)
+  // =========================================================================
+  const WorldManager = {
+    CELL_SIZE: 360,
+    landmarks: new Map(), // key: "cx,cz" -> { type, x, z, radius, yaw, scale, passed, modelMat }
+
+    hash2(ix, iz) {
+      let n = Math.imul(ix, 374761393) + Math.imul(iz, 668265263);
+      n = (n ^ (n >>> 13)) * 1274126177;
+      return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+    },
+
+    update(playerX, playerZ) {
+      const wx = playerX + OceanState.originOffsetX;
+      const wz = playerZ + OceanState.originOffsetZ;
+      const curCx = Math.floor(wx / this.CELL_SIZE);
+      const curCz = Math.floor(wz / this.CELL_SIZE);
+      const range = 4;
+
+      const keepKeys = new Set();
+      for (let dz = -range; dz <= range; dz++) {
+        for (let dx = -range; dx <= range; dx++) {
+          const cx = curCx + dx;
+          const cz = curCz + dz;
+          // 出生点中央留出开阔航道
+          if (Math.abs(cx) <= 0 && Math.abs(cz) <= 0) continue;
+          const key = `${cx},${cz}`;
+          keepKeys.add(key);
+
+          if (!this.landmarks.has(key)) {
+            const r = this.hash2(cx, cz);
+            if (r < 0.56) {
+              const jx = (this.hash2(cx + 19, cz - 7) - 0.5) * this.CELL_SIZE * 0.68;
+              const jz = (this.hash2(cx - 11, cz + 23) - 0.5) * this.CELL_SIZE * 0.68;
+              const worldX = (cx + 0.5) * this.CELL_SIZE + jx;
+              const worldZ = (cz + 0.5) * this.CELL_SIZE + jz;
+              const yaw = this.hash2(cx + 3, cz + 5) * TWO_PI;
+
+              let type = 'gate';
+              let radius = 10.5;
+              let scale = 1.0;
+              if (r < 0.24) {
+                type = 'island';
+                scale = 0.85 + this.hash2(cx + 31, cz) * 0.85;
+                radius = 27.0 * scale;
+              } else if (r < 0.36) {
+                type = 'lighthouse';
+                scale = 1.05;
+                radius = 10.5;
+              }
+
+              this.landmarks.set(key, {
+                type,
+                worldX,
+                worldZ,
+                x: worldX - OceanState.originOffsetX,
+                z: worldZ - OceanState.originOffsetZ,
+                radius,
+                yaw,
+                scale,
+                passed: false,
+                modelMat: Math3D.mat4Create()
+              });
+            } else {
+              this.landmarks.set(key, null);
+            }
+          }
+        }
+      }
+
+      // 回收视野外区块并刷新现存地标矩阵
+      for (const [key, lm] of this.landmarks.entries()) {
+        if (!keepKeys.has(key)) {
+          this.landmarks.delete(key);
+          continue;
+        }
+        if (!lm) continue;
+        lm.x = lm.worldX - OceanState.originOffsetX;
+        lm.z = lm.worldZ - OceanState.originOffsetZ;
+        let y = 0;
+        if (lm.type === 'gate') {
+          OceanState.sample(lm.x, lm.z, _sampleTmp);
+          y = _sampleTmp.y * 0.55;
+        }
+        Math3D.mat4FromTRS(lm.modelMat, lm.x, y, lm.z, lm.yaw, 0, 0, lm.scale, lm.scale, lm.scale);
+      }
+    },
+
+    // 检测玩家穿过加速航道门 & 撞击岛屿/灯塔边界
+    checkInteractions(yachts) {
+      for (const lm of this.landmarks.values()) {
+        if (!lm) continue;
+
+        if (lm.type === 'gate') {
+          const dx = player.x - lm.x;
+          const dz = player.z - lm.z;
+          const dist = Math.hypot(dx, dz);
+          if (dist < 10.2 && !lm.passed) {
+            lm.passed = true;
+            player.nitro = 100;
+            const fwd = player.getForward();
+            player.vx += fwd[0] * 12;
+            player.vz += fwd[1] * 12;
+            SoundEngine.playGateChime();
+            SpraySystem.emitSlamSplash(player.x, player.y, player.z, 1.05);
+            if (navigator.vibrate) navigator.vibrate([30, 30, 60]);
+            GameState.addScore(500, '⚡ 冲破海上加速门 +500 · 氮气满格!');
+          } else if (dist > 45 && lm.passed) {
+            lm.passed = false;
+          }
+          continue;
+        }
+
+        // 岛屿与灯塔刚体弹开
+        for (const b of yachts) {
+          const dx = b.x - lm.x;
+          const dz = b.z - lm.z;
+          const dist = Math.hypot(dx, dz) || 0.001;
+          const minDist = lm.radius + b.radius;
+          if (dist < minDist) {
+            const nx = dx / dist, nz = dz / dist;
+            const pen = minDist - dist;
+            b.x += nx * pen;
+            b.z += nz * pen;
+            const vn = b.vx * nx + b.vz * nz;
+            if (vn < 0) {
+              b.vx -= 1.65 * vn * nx;
+              b.vz -= 1.65 * vn * nz;
+              b.yawRate += (Math.random() - 0.5) * 2.2;
+              if (b.isPlayer && b.hitCooldown <= 0) {
+                b.hitCooldown = 0.5;
+                const imp = Math3D.clamp(Math.abs(vn) / 14, 0.35, 1.3);
+                SpraySystem.emitCollisionBurst(b.x - nx * 2.2, b.y + 0.4, b.z - nz * 2.2, imp);
+                SoundEngine.playCrash(imp);
+                CameraSystem.addShake(imp * 0.9);
+                triggerImpactFlash();
+                if (navigator.vibrate) navigator.vibrate(90);
+                showToast('⚠️ 触礁擦碰！已自动弹离');
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+
+  // =========================================================================
+  // 12. 智能 AI 游艇舰队、追逐 AI 与刚体撞击系统
+  // =========================================================================
+  const player = new Yacht({
+    id: 'player',
+    name: 'AZURE FLAGSHIP',
+    isPlayer: true,
+    role: 'player',
+    mesh: Meshes.yachtPlayer,
+    tint: [1.0, 1.0, 1.0],
+    scale: 1.05,
+    maxSpeed: 33.5,
+    accel: 18.5,
+    turnPower: 2.05
+  });
+
+  const AI_PROFILES = [
+    { name: '拦截快艇 · VIPER', role: 'chaser', mesh: Meshes.yachtRacer, tint: [1.0, 0.45, 0.45], scale: 0.95, maxSpeed: 30.5, accel: 16.5 },
+    { name: '拦截快艇 · SHARK', role: 'chaser', mesh: Meshes.yachtRacer, tint: [1.0, 0.72, 0.25], scale: 0.98, maxSpeed: 31.2, accel: 17.0 },
+    { name: '竞速艇 · PHANTOM', role: 'racer',  mesh: Meshes.yachtRacer, tint: [0.45, 1.0, 0.85], scale: 0.92, maxSpeed: 32.0, accel: 17.5 },
+    { name: '竞速艇 · NEON',    role: 'racer',  mesh: Meshes.yachtPlayer, tint: [0.78, 0.62, 1.0], scale: 1.00, maxSpeed: 29.0, accel: 15.5 },
+    { name: '豪华巡航 · ROYAL', role: 'cruiser', mesh: Meshes.yachtSuper, tint: [0.95, 0.95, 1.0], scale: 1.18, maxSpeed: 21.5, accel: 10.5 },
+    { name: '超级游艇 · TITAN', role: 'cruiser', mesh: Meshes.yachtSuper, tint: [0.75, 0.88, 1.0], scale: 1.26, maxSpeed: 19.5, accel: 9.5 },
+    { name: '海上猎手 · APEX',  role: 'chaser', mesh: Meshes.yachtPlayer, tint: [1.0, 0.38, 0.65], scale: 1.02, maxSpeed: 31.8, accel: 17.2 }
+  ];
+
+  const allYachts = [player];
+  const aiYachts = [];
+
+  for (let i = 0; i < AI_PROFILES.length; i++) {
+    const p = AI_PROFILES[i];
+    const ang = (i / AI_PROFILES.length) * TWO_PI + 0.35;
+    const dist = 65 + (i % 3) * 48;
+    const ai = new Yacht({
+      id: `ai_${i}`,
+      name: p.name,
+      isPlayer: false,
+      role: p.role,
+      mesh: p.mesh,
+      tint: p.tint,
+      scale: p.scale,
+      x: Math.sin(ang) * dist,
+      z: Math.cos(ang) * dist,
+      yaw: ang + Math.PI * 0.4,
+      maxSpeed: p.maxSpeed,
+      accel: p.accel,
+      turnPower: 1.75
+    });
+    aiYachts.push(ai);
+    allYachts.push(ai);
+  }
+
+  const GameState = {
+    started: false,
+    score: 0,
+    combo: 0,
+    comboTimer: 0,
+    aggressiveAI: true,
+    cameraMode: 0, // 0:追尾, 1:驾驶舱, 2:电影环绕, 3:高空俯视
+
+    addScore(pts, msg) {
+      this.score += pts;
+      document.getElementById('uiScore').textContent = `SCORE ${this.score}`;
+      if (msg) showToast(msg);
+    }
+  };
+
+  function wrapAngle(a) {
+    while (a > Math.PI) a -= TWO_PI;
+    while (a < -Math.PI) a += TWO_PI;
+    return a;
+  }
+
+  function updateAIAndCollisions(dt) {
+    if (GameState.comboTimer > 0) {
+      GameState.comboTimer -= dt;
+      if (GameState.comboTimer <= 0) GameState.combo = 0;
+    }
+
+    for (const ai of aiYachts) {
+      const dx = player.x - ai.x;
+      const dz = player.z - ai.z;
+      const dist = Math.hypot(dx, dz);
+
+      // 若 AI 游艇被甩开超过 520m，在玩家前方宽扇区无缝重生，保持无限海域永远热闹
+      if (dist > 520) {
+        const aheadYaw = player.yaw + (Math.random() - 0.5) * 1.45;
+        const spawnDist = 180 + Math.random() * 140;
+        ai.x = player.x + Math.sin(aheadYaw) * spawnDist;
+        ai.z = player.z + Math.cos(aheadYaw) * spawnDist;
+        ai.yaw = player.yaw + (Math.random() - 0.5) * 1.8;
+        ai.vx = Math.sin(ai.yaw) * 12;
+        ai.vz = Math.cos(ai.yaw) * 12;
+        ai.wake.nodes.length = 0;
+        ai.wake.inited = false;
+        continue;
+      }
+
+      // 计算目标航向
+      let targetX, targetZ;
+      let wantThrottle = ai.aiSpeedFactor;
+
+      if (ai.role === 'chaser' && GameState.aggressiveAI) {
+        // 拦截追击逻辑：预判玩家 1.2 秒后的位置进行高速包抄撞击
+        const lead = Math.min(1.3, dist / 26);
+        targetX = player.x + player.vx * lead;
+        targetZ = player.z + player.vz * lead;
+        wantThrottle = dist > 26 ? 1.0 : 0.92;
+        ai.nitroActive = dist > 75 && dist < 210 && ai.nitro > 45;
+      } else if (ai.role === 'racer') {
+        // 竞速领跑逻辑：在玩家前方 45~120m 左右蛇形高速领跑供玩家追逐超车
+        ai.aiTimer -= dt;
+        if (ai.aiTimer <= 0) {
+          ai.aiTimer = 3 + Math.random() * 4;
+          ai.aiAngle = (Math.random() - 0.5) * 1.1;
+        }
+        const runYaw = player.yaw + ai.aiAngle * 0.45;
+        targetX = player.x + Math.sin(runYaw) * 135;
+        targetZ = player.z + Math.cos(runYaw) * 135;
+        wantThrottle = dist < 45 ? 1.0 : 0.85;
+      } else {
+        // 豪华游艇优雅巡航
+        ai.aiTimer -= dt;
+        if (ai.aiTimer <= 0) {
+          ai.aiTimer = 6 + Math.random() * 6;
+          ai.aiAngle += (Math.random() - 0.5) * 1.4;
+        }
+        targetX = ai.x + Math.sin(ai.aiAngle) * 120;
+        targetZ = ai.z + Math.cos(ai.aiAngle) * 120;
+        wantThrottle = 0.62;
+      }
+
+      // 自动避开岛屿与灯塔
+      let avoidX = 0, avoidZ = 0;
+      for (const lm of WorldManager.landmarks.values()) {
+        if (!lm || lm.type === 'gate') continue;
+        const ldx = ai.x - lm.x;
+        const ldz = ai.z - lm.z;
+        const ldist = Math.hypot(ldx, ldz);
+        const safeR = lm.radius + 36;
+        if (ldist < safeR && ldist > 0.1) {
+          const push = (safeR - ldist) / safeR;
+          avoidX += (ldx / ldist) * push * 90;
+          avoidZ += (ldz / ldist) * push * 90;
+        }
+      }
+
+      const desiredYaw = Math.atan2((targetX - ai.x) + avoidX, (targetZ - ai.z) + avoidZ);
+      const err = wrapAngle(desiredYaw - ai.yaw);
+      // 因为右舵 steer>0 会减小 yaw，所以 steer 与 -err 成正比
+      ai.steer = Math3D.clamp(-err * 1.85, -1, 1);
+      ai.throttle = wantThrottle;
+    }
+
+    // 所有游艇两两刚体碰撞解算（动量守恒 + 甩尾力矩 + 水花炸裂 + 震动积分）
+    for (let i = 0; i < allYachts.length; i++) {
+      for (let j = i + 1; j < allYachts.length; j++) {
+        const a = allYachts[i];
+        const b = allYachts[j];
+        const dx = b.x - a.x;
+        const dz = b.z - a.z;
+        const dist = Math.hypot(dx, dz) || 0.001;
+        const minDist = a.radius + b.radius;
+
+        if (dist < minDist) {
+          const nx = dx / dist;
+          const nz = dz / dist;
+          const overlap = minDist - dist;
+          const invMa = 1 / a.mass;
+          const invMb = 1 / b.mass;
+          const invSum = invMa + invMb;
+
+          // 位置分离
+          a.x -= nx * overlap * (invMa / invSum);
+          a.z -= nz * overlap * (invMa / invSum);
+          b.x += nx * overlap * (invMb / invSum);
+          b.z += nz * overlap * (invMb / invSum);
+
+          // 相对速度冲量
+          const rvx = b.vx - a.vx;
+          const rvz = b.vz - a.vz;
+          const velAlongNormal = rvx * nx + rvz * nz;
+
+          if (velAlongNormal < 0) {
+            const restitution = 0.72;
+            const impulse = -(1 + restitution) * velAlongNormal / invSum;
+            a.vx -= impulse * invMa * nx;
+            a.vz -= impulse * invMa * nz;
+            b.vx += impulse * invMb * nx;
+            b.vz += impulse * invMb * nz;
+
+            // 撞击导致船体弹跳、横摇和甩尾旋转
+            const impactSpd = Math.abs(velAlongNormal);
+            const spin = Math3D.clamp(impactSpd * 0.16, 0.4, 2.8);
+            a.yawRate += (Math.random() > 0.5 ? 1 : -1) * spin;
+            b.yawRate += (Math.random() > 0.5 ? -1 : 1) * spin * 1.25;
+            a.vy += Math.min(3.5, impactSpd * 0.14);
+            b.vy += Math.min(4.8, impactSpd * 0.22);
+
+            const hitX = (a.x + b.x) * 0.5;
+            const hitY = Math.max(a.y, b.y) + 0.35;
+            const hitZ = (a.z + b.z) * 0.5;
+            const intensity = Math3D.clamp(impactSpd / 16, 0.35, 1.5);
+
+            SpraySystem.emitCollisionBurst(hitX, hitY, hitZ, intensity);
+
+            if ((a.isPlayer || b.isPlayer) && player.hitCooldown <= 0) {
+              player.hitCooldown = 0.42;
+              const rival = a.isPlayer ? b : a;
+              SoundEngine.playCrash(intensity);
+              CameraSystem.addShake(intensity * 1.15);
+              triggerImpactFlash();
+              if (navigator.vibrate) navigator.vibrate([65, 35, 95]);
+
+              GameState.combo++;
+              GameState.comboTimer = 6.5;
+              const bonus = Math.round((150 + impactSpd * 18) * (1 + (GameState.combo - 1) * 0.35));
+              player.nitro = Math.min(100, player.nitro + 24);
+              const tag = GameState.combo > 1 ? `🔥 ${GameState.combo}连撞! ` : '💥 撞飞 ';
+              GameState.addScore(bonus, `${tag}${rival.name} +${bonus}`);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // =========================================================================
+  // 13. 全端操控系统（键鼠 + 触控摇杆/油门推杆 + 全向屏幕自适应陀螺仪）
+  // =========================================================================
+  const Input = {
+    keys: Object.create(null),
+    touchSteer: 0,
+    touchSteerActive: false,
+    touchThrottle: 0,
+    touchThrottleActive: false,
+    touchNitro: false,
+
+    // 陀螺仪状态
+    gyroEnabled: false,
+    gyroCalibrated: false,
+    gyroZeroRoll: 0,
+    gyroZeroPitch: 0,
+    gyroRawRoll: 0,
+    gyroRawPitch: 0,
+    gyroSteer: 0,
+
+    // 环视镜头拖拽偏移
+    camOrbitYaw: 0,
+    camOrbitPitch: 0,
+    draggingCam: false,
+    dragPointerId: null,
+    lastDragX: 0,
+    lastDragY: 0,
+
+    getScreenAngle() {
+      if (screen.orientation && typeof screen.orientation.angle === 'number') {
+        return screen.orientation.angle;
+      }
+      return typeof window.orientation === 'number' ? window.orientation : 0;
+    },
+
+    // 根据手机/平板竖屏、左横屏、右横屏、倒竖屏自动重映射陀螺仪倾角
+    onDeviceOrientation(e) {
+      if (e.beta == null || e.gamma == null) return;
+      const angle = ((Input.getScreenAngle() % 360) + 360) % 360;
+      let tiltSteer = 0;
+      let tiltPitch = 0;
+
+      if (angle === 0) {
+        // 竖屏
+        tiltSteer = e.gamma;
+        tiltPitch = e.beta;
+      } else if (angle === 90) {
+        // 逆时针横屏（右侧在底部）
+        tiltSteer = e.beta;
+        tiltPitch = -e.gamma;
+      } else if (angle === 270) {
+        // 顺时针横屏
+        tiltSteer = -e.beta;
+        tiltPitch = e.gamma;
+      } else {
+        // 180° 倒竖屏
+        tiltSteer = -e.gamma;
+        tiltPitch = -e.beta;
+      }
+
+      Input.gyroRawRoll = tiltSteer;
+      Input.gyroRawPitch = tiltPitch;
+
+      if (!Input.gyroCalibrated) {
+        Input.gyroZeroRoll = tiltSteer;
+        Input.gyroZeroPitch = tiltPitch;
+        Input.gyroCalibrated = true;
+      }
+
+      let delta = tiltSteer - Input.gyroZeroRoll;
+      // 死区 2.5°，满舵 26° + 低通平滑防抖
+      if (Math.abs(delta) < 2.5) delta = 0;
+      else delta -= Math.sign(delta) * 2.5;
+
+      const norm = Math3D.clamp(delta / 24.0, -1, 1);
+      Input.gyroSteer = Math3D.lerp(Input.gyroSteer, norm, 0.24);
+    },
+
+    async toggleGyro() {
+      const btn = document.getElementById('btnGyro');
+      const status = document.getElementById('gyroStatus');
+
+      if (this.gyroEnabled) {
+        this.gyroEnabled = false;
+        window.removeEventListener('deviceorientation', this.onDeviceOrientation);
+        btn.classList.remove('active');
+        status.classList.remove('visible');
+        showToast('🧭 陀螺仪控舵已关闭');
+        return;
+      }
+
+      if (typeof DeviceOrientationEvent === 'undefined') {
+        showToast('⚠️ 当前设备无陀螺仪传感器');
+        return;
+      }
+
+      // iOS 13+ 必须在用户点击手势内请求陀螺仪权限
+      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+          const res = await DeviceOrientationEvent.requestPermission();
+          if (res !== 'granted') {
+            showToast('⚠️ 未授予陀螺仪权限');
+            return;
+          }
+        } catch (err) {
+          showToast('⚠️ 陀螺仪需在 HTTPS 或本地安全环境启用');
+          return;
+        }
+      }
+
+      this.gyroCalibrated = false;
+      this.gyroSteer = 0;
+      this.gyroEnabled = true;
+      window.addEventListener('deviceorientation', this.onDeviceOrientation);
+      btn.classList.add('active');
+      status.classList.add('visible');
+      showToast('🧭 陀螺仪已启用 · 倾斜设备控舵');
+    },
+
+    recenterGyro() {
+      if (!this.gyroEnabled) return;
+      this.gyroZeroRoll = this.gyroRawRoll;
+      this.gyroZeroPitch = this.gyroRawPitch;
+      if (navigator.vibrate) navigator.vibrate(25);
+      showToast('🧭 陀螺仪水平零点已校准');
+    },
+
+    initUI() {
+      // 键盘控制
+      window.addEventListener('keydown', (e) => {
+        const k = e.code;
+        this.keys[k] = true;
+        if (!GameState.started) return;
+        if (k === 'KeyC') cycleCamera();
+        if (k === 'KeyV') cycleWeather();
+        if (k === 'KeyH') { SoundEngine.playHorn(); showToast('📯 游艇鸣笛'); }
+        if (k === 'Space') e.preventDefault();
+      });
+      window.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
+
+      // 屏幕方向旋转自动重新校准陀螺仪零点
+      window.addEventListener('orientationchange', () => {
+        if (this.gyroEnabled) this.gyroCalibrated = false;
+      });
+
+      // 左手虚拟方向舵摇杆
+      const steerPad = document.getElementById('steerPad');
+      const steerKnob = document.getElementById('steerKnob');
+      let steerPid = null;
+
+      const updateSteerVisual = (val) => {
+        const maxPx = steerPad.clientWidth * 0.30;
+        steerKnob.style.transform = `translate3d(${(val * maxPx).toFixed(1)}px, 0, 0)`;
+      };
+
+      steerPad.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        if (this.gyroEnabled) {
+          this.recenterGyro();
+        }
+        steerPad.setPointerCapture(e.pointerId);
+        steerPid = e.pointerId;
+        this.touchSteerActive = true;
+        const rect = steerPad.getBoundingClientRect();
+        this.touchSteer = Math3D.clamp((e.clientX - (rect.left + rect.width * 0.5)) / (rect.width * 0.38), -1, 1);
+        updateSteerVisual(this.touchSteer);
+      });
+
+      steerPad.addEventListener('pointermove', (e) => {
+        if (e.pointerId !== steerPid) return;
+        const rect = steerPad.getBoundingClientRect();
+        this.touchSteer = Math3D.clamp((e.clientX - (rect.left + rect.width * 0.5)) / (rect.width * 0.38), -1, 1);
+        updateSteerVisual(this.touchSteer);
+      });
+
+      const endSteer = (e) => {
+        if (e.pointerId !== steerPid) return;
+        steerPid = null;
+        this.touchSteerActive = false;
+        this.touchSteer = 0;
+        updateSteerVisual(0);
+      };
+      steerPad.addEventListener('pointerup', endSteer);
+      steerPad.addEventListener('pointercancel', endSteer);
+
+      // 右手阻尼游艇油门推杆（松手保持巡航档位，拖拽至 N 槽位自动吸附空档）
+      const throttleBox = document.getElementById('throttleBox');
+      const throttleHandle = document.getElementById('throttleHandle');
+      let thrPid = null;
+
+      const applyThrottleRatio = (ratio) => {
+        // ratio: 0(顶部 MAX) ~ 1(底部 REV)，0.72 处为空档 N
+        const r = Math3D.clamp(ratio, 0.08, 0.92);
+        throttleHandle.style.top = `${(r * 100).toFixed(1)}%`;
+        let val = 0;
+        if (Math.abs(r - 0.72) < 0.055) {
+          val = 0;
+          throttleHandle.style.top = '72%';
+          throttleHandle.textContent = 'N';
+        } else if (r < 0.72) {
+          val = Math3D.clamp((0.72 - r) / 0.64, 0, 1);
+          throttleHandle.textContent = `${Math.round(val * 100)}%`;
+        } else {
+          val = -Math3D.clamp((r - 0.72) / 0.20, 0, 1) * 0.55;
+          throttleHandle.textContent = 'REV';
+        }
+        this.touchThrottle = val;
+        this.touchThrottleActive = true;
+      };
+
+      const handleThrottleEvent = (e) => {
+        const rect = throttleBox.getBoundingClientRect();
+        applyThrottleRatio((e.clientY - rect.top) / rect.height);
+      };
+
+      throttleBox.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        throttleBox.setPointerCapture(e.pointerId);
+        thrPid = e.pointerId;
+        handleThrottleEvent(e);
+      });
+      throttleBox.addEventListener('pointermove', (e) => {
+        if (e.pointerId !== thrPid) return;
+        handleThrottleEvent(e);
+      });
+      const endThr = (e) => { if (e.pointerId === thrPid) thrPid = null; };
+      throttleBox.addEventListener('pointerup', endThr);
+      throttleBox.addEventListener('pointercancel', endThr);
+
+      // 氮气与汽笛触控键
+      const btnNitro = document.getElementById('btnNitro');
+      btnNitro.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        this.touchNitro = true;
+        btnNitro.classList.add('firing');
+      });
+      const stopNitro = () => { this.touchNitro = false; btnNitro.classList.remove('firing'); };
+      btnNitro.addEventListener('pointerup', stopNitro);
+      btnNitro.addEventListener('pointercancel', stopNitro);
+      btnNitro.addEventListener('pointerleave', stopNitro);
+
+      document.getElementById('btnHorn').addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        SoundEngine.playHorn();
+        if (navigator.vibrate) navigator.vibrate(40);
+      });
+
+      // 主画布单指/鼠标拖拽自由环视视角
+      canvas.addEventListener('pointerdown', (e) => {
+        if (!GameState.started) return;
+        this.draggingCam = true;
+        this.dragPointerId = e.pointerId;
+        this.lastDragX = e.clientX;
+        this.lastDragY = e.clientY;
+      });
+      window.addEventListener('pointermove', (e) => {
+        if (!this.draggingCam || e.pointerId !== this.dragPointerId) return;
+        const dx = e.clientX - this.lastDragX;
+        const dy = e.clientY - this.lastDragY;
+        this.lastDragX = e.clientX;
+        this.lastDragY = e.clientY;
+        this.camOrbitYaw -= dx * 0.0055;
+        this.camOrbitPitch = Math3D.clamp(this.camOrbitPitch + dy * 0.004, -0.25, 0.72);
+      });
+      const stopDrag = (e) => {
+        if (e.pointerId === this.dragPointerId) {
+          this.draggingCam = false;
+          this.dragPointerId = null;
+        }
+      };
+      window.addEventListener('pointerup', stopDrag);
+      window.addEventListener('pointercancel', stopDrag);
+
+      // 顶部功能按钮绑定
+      document.getElementById('btnGyro').addEventListener('click', () => this.toggleGyro());
+      document.getElementById('btnCamera').addEventListener('click', cycleCamera);
+      document.getElementById('btnWeather').addEventListener('click', cycleWeather);
+      document.getElementById('btnChase').addEventListener('click', () => {
+        GameState.aggressiveAI = !GameState.aggressiveAI;
+        const b = document.getElementById('btnChase');
+        b.classList.toggle('warn', GameState.aggressiveAI);
+        b.textContent = GameState.aggressiveAI ? '⚡ 激战AI' : '⛵ 休闲AI';
+        showToast(GameState.aggressiveAI ? '⚡ AI 拦截快艇已进入狂暴追击模式' : '⛵ AI 已切换为和平巡航模式');
+      });
+      document.getElementById('btnChase').classList.add('warn');
+
+      document.getElementById('btnAudio').addEventListener('click', () => {
+        SoundEngine.setMuted(SoundEngine.enabled);
+        document.getElementById('btnAudio').textContent = SoundEngine.enabled ? '🔊' : '🔇';
+      });
+    },
+
+    applyToPlayer(dt) {
+      if (!GameState.started) {
+        // 启航前自动展示巡航演示
+        player.throttle = 0.52;
+        player.steer = Math.sin(OceanState.time * 0.25) * 0.22;
+        player.nitroActive = false;
+        return;
+      }
+
+      // 键盘方向输入
+      let kSteer = 0;
+      if (this.keys['KeyA'] || this.keys['ArrowLeft']) kSteer -= 1;
+      if (this.keys['KeyD'] || this.keys['ArrowRight']) kSteer += 1;
+
+      let kThrottle = null;
+      if (this.keys['KeyW'] || this.keys['ArrowUp']) kThrottle = 1.0;
+      else if (this.keys['KeyS'] || this.keys['ArrowDown']) kThrottle = -0.55;
+
+      // 合并舵角优先级：手搓摇杆 > 键盘 > 陀螺仪
+      let finalSteer = 0;
+      if (this.touchSteerActive) {
+        finalSteer = this.touchSteer;
+      } else if (kSteer !== 0) {
+        finalSteer = kSteer;
+      } else if (this.gyroEnabled) {
+        finalSteer = this.gyroSteer;
+        // 实时同步左侧摇杆视觉指示当前陀螺仪舵角
+        const pad = document.getElementById('steerPad');
+        const knob = document.getElementById('steerKnob');
+        if (pad && knob) {
+          knob.style.transform = `translate3d(${(finalSteer * pad.clientWidth * 0.30).toFixed(1)}px, 0, 0)`;
+        }
+      }
+      player.steer = Math3D.lerp(player.steer, finalSteer, Math.min(1, dt * 11));
+
+      // 合并油门：键盘瞬时覆盖或推杆保持
+      if (kThrottle !== null) {
+        this.touchThrottleActive = false;
+        player.throttle = Math3D.lerp(player.throttle, kThrottle, Math.min(1, dt * 6.5));
+        // 同步右侧油门视觉位置
+        const handle = document.getElementById('throttleHandle');
+        if (handle) {
+          const r = player.throttle >= 0 ? (0.72 - player.throttle * 0.64) : (0.72 + (-player.throttle / 0.55) * 0.20);
+          handle.style.top = `${(r * 100).toFixed(1)}%`;
+          handle.textContent = player.throttle > 0.05 ? `${Math.round(player.throttle * 100)}%` : (player.throttle < -0.05 ? 'REV' : 'N');
+        }
+      } else if (this.touchThrottleActive) {
+        player.throttle = Math3D.lerp(player.throttle, this.touchThrottle, Math.min(1, dt * 7.5));
+      } else {
+        player.throttle = Math3D.lerp(player.throttle, 0, Math.min(1, dt * 3.0));
+        const handle = document.getElementById('throttleHandle');
+        if (handle && Math.abs(player.throttle) < 0.04) {
+          handle.style.top = '72%';
+          handle.textContent = 'N';
+        }
+      }
+
+      player.nitroActive = !!(this.touchNitro || this.keys['Space']);
+
+      // 未拖拽镜头时缓慢回正环视偏移
+      if (!this.draggingCam && GameState.cameraMode !== 2) {
+        this.camOrbitYaw *= Math.exp(-dt * 1.8);
+        this.camOrbitPitch *= Math.exp(-dt * 1.8);
+      }
+    }
+  };
+
+  // =========================================================================
+  // 14. 4 视角电影摄像机与天空盒逆矩阵计算 (CameraSystem)
+  // =========================================================================
+  const CameraSystem = {
+    pos: new Float32Array([0, 6, -16]),
+    target: new Float32Array([0, 1.5, 4]),
+    viewMat: Math3D.mat4Create(),
+    projMat: Math3D.mat4Create(),
+    viewProj: Math3D.mat4Create(),
+    invProj: Math3D.mat4Create(),
+    invViewRot: Math3D.mat4Create(),
+    fov: 58 * Math.PI / 180,
+    shake: 0,
+    cineAngle: 0,
+
+    addShake(amount) {
+      this.shake = Math.min(1.6, this.shake + amount);
+    },
+
+    shiftOrigin(dx, dz) {
+      this.pos[0] -= dx;
+      this.pos[2] -= dz;
+      this.target[0] -= dx;
+      this.target[2] -= dz;
+    },
+
+    update(dt, aspect) {
+      this.shake = Math.max(0, this.shake - dt * 2.6);
+      const fwdX = Math.sin(player.yaw);
+      const fwdZ = Math.cos(player.yaw);
+
+      // 动态速度 FOV（高速/氮气带来强烈速度拉伸感）
+      const targetFov = (56 + Math3D.clamp(player.speed * 0.42, 0, 16) + (player.nitroActive ? 8 : 0)) * Math.PI / 180;
+      this.fov = Math3D.lerp(this.fov, targetFov, Math.min(1, dt * 4.5));
+
+      let desX, desY, desZ, lookX, lookY, lookZ;
+      const mode = GameState.started ? GameState.cameraMode : 2;
+
+      if (mode === 0) {
+        // 0: 动态拟真追尾视角
+        const orbitYaw = player.yaw + Input.camOrbitYaw;
+        const dist = 14.5 + Math3D.clamp(player.speed * 0.14, 0, 4.5);
+        const height = 4.6 + Input.camOrbitPitch * 8.5 + (player.airborne ? 1.2 : 0);
+        desX = player.x - Math.sin(orbitYaw) * dist;
+        desZ = player.z - Math.cos(orbitYaw) * dist;
+        OceanState.sample(desX, desZ, _sampleTmp);
+        desY = Math.max(_sampleTmp.y + 1.85, player.y + height);
+        lookX = player.x + fwdX * 7.5;
+        lookY = player.y + 1.45;
+        lookZ = player.z + fwdZ * 7.5;
+      } else if (mode === 1) {
+        // 1: 驾驶舱第一人称视角
+        desX = player.x + fwdX * 0.85;
+        desY = player.y + 2.35;
+        desZ = player.z + fwdZ * 0.85;
+        const lookYaw = player.yaw + Input.camOrbitYaw;
+        lookX = desX + Math.sin(lookYaw) * 24;
+        lookY = desY - Math.sin(player.pitch) * 14 - Input.camOrbitPitch * 8;
+        lookZ = desZ + Math.cos(lookYaw) * 24;
+      } else if (mode === 2) {
+        // 2: 电影动态环绕镜头
+        this.cineAngle += dt * (GameState.started ? 0.34 : 0.22);
+        const a = player.yaw + this.cineAngle + Input.camOrbitYaw;
+        const r = 17.5;
+        desX = player.x - Math.sin(a) * r;
+        desZ = player.z - Math.cos(a) * r;
+        OceanState.sample(desX, desZ, _sampleTmp);
+        desY = Math.max(_sampleTmp.y + 2.4, player.y + 5.2 + Math.sin(this.cineAngle * 1.4) * 1.6);
+        lookX = player.x + fwdX * 2.5;
+        lookY = player.y + 1.2;
+        lookZ = player.z + fwdZ * 2.5;
+      } else {
+        // 3: 战术高空俯瞰视角（追逐撞击极爽）
+        desX = player.x - fwdX * 26;
+        desY = player.y + 28;
+        desZ = player.z - fwdZ * 26;
+        lookX = player.x + fwdX * 12;
+        lookY = player.y;
+        lookZ = player.z + fwdZ * 12;
+      }
+
+      const smooth = mode === 1 ? Math.min(1, dt * 18) : Math.min(1, dt * 6.8);
+      this.pos[0] = Math3D.lerp(this.pos[0], desX, smooth);
+      this.pos[1] = Math3D.lerp(this.pos[1], desY, smooth);
+      this.pos[2] = Math3D.lerp(this.pos[2], desZ, smooth);
+      this.target[0] = Math3D.lerp(this.target[0], lookX, Math.min(1, dt * 10));
+      this.target[1] = Math3D.lerp(this.target[1], lookY, Math.min(1, dt * 10));
+      this.target[2] = Math3D.lerp(this.target[2], lookZ, Math.min(1, dt * 10));
+
+      // 撞击/砸浪镜头高频震动
+      let sx = 0, sy = 0, sz = 0;
+      if (this.shake > 0.005) {
+        const s = this.shake * this.shake * 0.65;
+        sx = (Math.random() - 0.5) * s;
+        sy = (Math.random() - 0.5) * s;
+        sz = (Math.random() - 0.5) * s;
+      }
+      const eye = [this.pos[0] + sx, this.pos[1] + sy, this.pos[2] + sz];
+
+      Math3D.mat4LookAt(this.viewMat, eye, this.target, [0, 1, 0]);
+      Math3D.mat4Perspective(this.projMat, this.fov, aspect, 0.35, 3200.0);
+      Math3D.mat4Multiply(this.viewProj, this.projMat, this.viewMat);
+
+      // 解析法计算 Skybox 所需的 uInvProj 与 uInvViewRot (零误差、高性能)
+      const p = this.projMat;
+      const ip = this.invProj;
+      ip.fill(0);
+      ip[0] = 1 / p[0];
+      ip[5] = 1 / p[5];
+      ip[11] = 1 / p[14];
+      ip[14] = -1;
+      ip[15] = p[10] / p[14];
+
+      // 视图旋转矩阵正交，逆矩阵即其转置
+      const v = this.viewMat;
+      const iv = this.invViewRot;
+      iv.fill(0);
+      iv[0] = v[0]; iv[1] = v[4]; iv[2] = v[8];
+      iv[4] = v[1]; iv[5] = v[5]; iv[6] = v[9];
+      iv[8] = v[2]; iv[9] = v[6]; iv[10] = v[10];
+      iv[15] = 1;
+    }
+  };
+
+  // =========================================================================
+  // 15. 雷达小地图、HUD 刷新、辅助特效与主渲染循环
+  // =========================================================================
+  const radarCanvas = document.getElementById('radarCanvas');
+  const radarCtx = radarCanvas.getContext('2d');
+  const CAMERA_NAMES = ['🎥 追尾', '🚤 驾驶舱', '🎬 环绕', '🛰️ 俯视'];
+
+  function cycleCamera() {
+    GameState.cameraMode = (GameState.cameraMode + 1) % CAMERA_NAMES.length;
+    document.getElementById('btnCamera').textContent = CAMERA_NAMES[GameState.cameraMode];
+    Input.camOrbitYaw = 0;
+    Input.camOrbitPitch = 0;
+  }
+
+  function cycleWeather() {
+    const next = (OceanState.targetPreset + 1) % WEATHER_PRESETS.length;
+    OceanState.targetPreset = next;
+    document.getElementById('btnWeather').textContent = WEATHER_PRESETS[next].name;
+    showToast(`🌊 海况切换：${WEATHER_PRESETS[next].label}`);
+  }
+
+  function showToast(text) {
+    const feed = document.getElementById('toastFeed');
+    const el = document.createElement('div');
+    el.className = 'toast-item glass';
+    el.textContent = text;
+    feed.appendChild(el);
+    if (feed.children.length > 3) feed.firstChild.remove();
+    setTimeout(() => el.remove(), 2150);
+  }
+
+  let flashTimer = 0;
+  function triggerImpactFlash() {
+    flashTimer = 0.28;
+    document.getElementById('impactVignette').style.opacity = '1';
+  }
+
+  function renderRadar() {
+    const w = radarCanvas.width;
+    const h = radarCanvas.height;
+    const cx = w * 0.5, cy = h * 0.5, r = w * 0.46;
+    const ctx = radarCtx;
+    ctx.clearRect(0, 0, w, h);
+
+    // 雷达底盘与同心距环
+    ctx.fillStyle = 'rgba(4, 18, 32, 0.58)';
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, TWO_PI); ctx.fill();
+
+    ctx.strokeStyle = 'rgba(34, 211, 238, 0.24)';
+    ctx.lineWidth = 1.5;
+    for (const f of [0.35, 0.68, 1.0]) {
+      ctx.beginPath(); ctx.arc(cx, cy, r * f, 0, TWO_PI); ctx.stroke();
+    }
+
+    // 雷达扫描扇束
+    const sweep = (OceanState.time * 1.9) % TWO_PI;
+    ctx.fillStyle = 'rgba(34, 211, 238, 0.14)';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, sweep, sweep + 0.55);
+    ctx.closePath();
+    ctx.fill();
+
+    const range = 340; // 雷达探测半径 340m
+    const cosY = Math.cos(player.yaw);
+    const sinY = Math.sin(player.yaw);
+
+    // 将世界坐标转换到以玩家船首朝上的雷达相对坐标
+    const toRadar = (wx, wz) => {
+      const dx = wx - player.x;
+      const dz = wz - player.z;
+      // 船首 +Z 对应雷达正上方 (-Y)；右舷 (-cosY, sinY) 对应雷达正右方 (+X)
+      const fwd = dx * sinY + dz * cosY;
+      const right = -dx * cosY + dz * sinY;
+      return [cx + (right / range) * r, cy - (fwd / range) * r, Math.hypot(dx, dz)];
+    };
+
+    // 绘制海岛、灯塔、加速门
+    for (const lm of WorldManager.landmarks.values()) {
+      if (!lm) continue;
+      const [rx, ry, d] = toRadar(lm.x, lm.z);
+      if (d > range * 0.96) continue;
+      if (lm.type === 'island') {
+        ctx.fillStyle = 'rgba(16, 185, 129, 0.72)';
+        ctx.beginPath(); ctx.arc(rx, ry, Math.max(4, (lm.radius / range) * r), 0, TWO_PI); ctx.fill();
+      } else if (lm.type === 'lighthouse') {
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath(); ctx.arc(rx, ry, 4.2, 0, TWO_PI); ctx.fill();
+      } else {
+        ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(rx - 4, ry - 4, 8, 8);
+      }
+    }
+
+    // 绘制 AI 游艇（红=拦截追击，青=竞速，白=巡航）
+    for (const ai of aiYachts) {
+      const [rx, ry, d] = toRadar(ai.x, ai.z);
+      if (d > range * 0.96) continue;
+      ctx.fillStyle = ai.role === 'chaser' ? '#fb7185' : (ai.role === 'racer' ? '#38bdf8' : '#e2e8f0');
+      ctx.beginPath(); ctx.arc(rx, ry, 4.2, 0, TWO_PI); ctx.fill();
+    }
+
+    // 中心玩家游艇箭头
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 8);
+    ctx.lineTo(cx + 5.5, cy + 6);
+    ctx.lineTo(cx, cy + 3);
+    ctx.lineTo(cx - 5.5, cy + 6);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawMeshObject(mesh, modelMat, tint) {
+    const pr = Programs.mesh;
+    gl.uniformMatrix4fv(pr.u.uModel, false, modelMat);
+    gl.uniform3fv(pr.u.uTint, tint);
+    gl.bindVertexArray(mesh.vao);
+    gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
+  }
+
+  // 画布自适应 DPR（限制上限 2.0，兼顾视网膜锐度与手机 60FPS 温控）
+  function resizeCanvas() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.0);
+    const w = Math.floor(window.innerWidth * dpr);
+    const h = Math.floor(window.innerHeight * dpr);
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  // 初始化海况预设与启航界面交互
+  OceanState.init(0);
+  Input.initUI();
+
+  const pickerCards = document.querySelectorAll('#weatherPicker .preset-card');
+  pickerCards.forEach((card) => {
+    card.addEventListener('click', () => {
+      pickerCards.forEach((c) => c.classList.remove('selected'));
+      card.classList.add('selected');
+      const idx = Number(card.dataset.preset) || 0;
+      OceanState.targetPreset = idx;
+      document.getElementById('btnWeather').textContent = WEATHER_PRESETS[idx].name;
+    });
+  });
+
+  document.getElementById('btnLaunch').addEventListener('click', () => {
+    SoundEngine.init();
+    GameState.started = true;
+    document.body.classList.remove('menu-open');
+    document.body.classList.add('playing');
+    document.getElementById('startOverlay').classList.add('hidden');
+    // 启航瞬间给予平滑起步推力
+    player.throttle = 0.35;
+    showToast('⚓ 已离港进入无限海域 · 祝航行愉快!');
+  });
+
+  // 遥测仪表高频 DOM 缓存
+  const elSpeed = document.getElementById('uiSpeed');
+  const elRpm = document.getElementById('uiRpm');
+  const elWave = document.getElementById('uiWave');
+  const elNitro = document.getElementById('uiNitro');
+  const elHeading = document.getElementById('uiHeading');
+  const elFps = document.getElementById('uiFps');
+  const elVignette = document.getElementById('impactVignette');
+  const WHITE_TINT = new Float32Array([1, 1, 1]);
+  const COMPASS_DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+
+  let lastTime = performance.now();
+  let hudAccum = 0;
+  let fpsFrames = 0;
+  let fpsAccum = 0;
+
+  // =========================================================================
+  // 主 60FPS 模拟与 WebGL2 渲染循环
+  // =========================================================================
+  function frame(now) {
+    requestAnimationFrame(frame);
+
+    const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) * 0.001));
+    lastTime = now;
+    fpsFrames++;
+    fpsAccum += dt;
+
+    // 1) 更新海浪环境
+    OceanState.update(dt);
+
+    // 2) 浮动原点防精度漂移（航行距原点超过 2800m 时无缝归零平移）
+    if (Math.hypot(player.x, player.z) > 2800) {
+      const shiftX = Math.round(player.x / 64) * 64;
+      const shiftZ = Math.round(player.z / 64) * 64;
+      OceanState.originOffsetX += shiftX;
+      OceanState.originOffsetZ += shiftZ;
+      for (const b of allYachts) b.shiftOrigin(shiftX, shiftZ);
+      SpraySystem.shiftOrigin(shiftX, shiftZ);
+      CameraSystem.shiftOrigin(shiftX, shiftZ);
+    }
+
+    // 3) 输入处理、AI 舰队、游艇 6-DOF 物理、地标与碰撞解算
+    Input.applyToPlayer(dt);
+    updateAIAndCollisions(dt);
+    for (const b of allYachts) b.update(dt, OceanState.time);
+    WorldManager.update(player.x, player.z);
+    WorldManager.checkInteractions(allYachts);
+    SpraySystem.update(dt);
+
+    // 4) 更新声场与摄像机
+    SoundEngine.update(player.speed, Math.abs(player.throttle), player.nitroActive, player.airborne, OceanState.windSpeed);
+    const aspect = canvas.width / Math.max(1, canvas.height);
+    CameraSystem.update(dt, aspect);
+
+    // 撞击视觉暗角衰减
+    if (flashTimer > 0) {
+      flashTimer -= dt;
+      if (flashTimer <= 0) elVignette.style.opacity = '0';
+    }
+
+    // 5) WebGL2 渲染管线
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.disable(gl.CULL_FACE);
+
+    // --- Pass 1: 物理天空穹顶 ---
+    gl.disable(gl.DEPTH_TEST);
+    gl.depthMask(false);
+    {
+      const pr = Programs.sky;
+      gl.useProgram(pr.p);
+      gl.uniformMatrix4fv(pr.u.uInvProj, false, CameraSystem.invProj);
+      gl.uniformMatrix4fv(pr.u.uInvViewRot, false, CameraSystem.invViewRot);
+      gl.uniform3fv(pr.u.uSunDir, OceanState.sunDir);
+      gl.uniform3fv(pr.u.uSunColor, OceanState.sunColor);
+      gl.uniform3fv(pr.u.uSkyTop, OceanState.skyTop);
+      gl.uniform3fv(pr.u.uSkyHorizon, OceanState.skyHorizon);
+      gl.uniform1f(pr.u.uTime, OceanState.time);
+      gl.bindVertexArray(SkyMesh.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, SkyMesh.count);
+    }
+    gl.depthMask(true);
+    gl.enable(gl.DEPTH_TEST);
+
+    // --- Pass 2: 6 层 Gerstner 无限海洋 ---
+    {
+      const pr = Programs.ocean;
+      gl.useProgram(pr.p);
+      gl.uniformMatrix4fv(pr.u.uViewProj, false, CameraSystem.viewProj);
+      // 网格中心按 2.0m 步长吸附，彻底消除移动时波面顶点的微观闪烁
+      const snapX = Math.round(player.x * 0.5) * 2.0;
+      const snapZ = Math.round(player.z * 0.5) * 2.0;
+      gl.uniform2f(pr.u.uGridOrigin, snapX, snapZ);
+      gl.uniform2f(pr.u.uWorldOffset, OceanState.originOffsetX, OceanState.originOffsetZ);
+      gl.uniform1f(pr.u.uTime, OceanState.time);
+      gl.uniform1f(pr.u.uGridRadius, OceanMesh.radius);
+      gl.uniform4fv(pr.u.uWaves, OceanState.wavesFlat);
+      gl.uniform3fv(pr.u.uCamPos, CameraSystem.pos);
+      gl.uniform3fv(pr.u.uSunDir, OceanState.sunDir);
+      gl.uniform3fv(pr.u.uSunColor, OceanState.sunColor);
+      gl.uniform3fv(pr.u.uSkyTop, OceanState.skyTop);
+      gl.uniform3fv(pr.u.uSkyHorizon, OceanState.skyHorizon);
+      gl.uniform3fv(pr.u.uDeepColor, OceanState.deepColor);
+      gl.uniform3fv(pr.u.uShallowColor, OceanState.shallowColor);
+      gl.uniform3fv(pr.u.uSssColor, OceanState.sssColor);
+      gl.uniform3fv(pr.u.uFogColor, OceanState.fogColor);
+      gl.uniform1f(pr.u.uFogDensity, OceanState.fogDensity);
+      gl.uniform3f(pr.u.uBoatPos, player.x, player.y, player.z);
+      gl.uniform2f(pr.u.uBoatFwd, Math.sin(player.yaw), Math.cos(player.yaw));
+      gl.uniform1f(pr.u.uBoatSpeed, player.speed);
+
+      gl.bindVertexArray(OceanMesh.vao);
+      gl.drawElements(gl.TRIANGLES, OceanMesh.count, gl.UNSIGNED_INT, 0);
+    }
+
+    // --- Pass 3: 玩家游艇、AI 舰队与无限海域地标 ---
+    {
+      const pr = Programs.mesh;
+      gl.useProgram(pr.p);
+      gl.uniformMatrix4fv(pr.u.uViewProj, false, CameraSystem.viewProj);
+      gl.uniform3fv(pr.u.uCamPos, CameraSystem.pos);
+      gl.uniform3fv(pr.u.uSunDir, OceanState.sunDir);
+      gl.uniform3fv(pr.u.uSunColor, OceanState.sunColor);
+      gl.uniform3fv(pr.u.uSkyTop, OceanState.skyTop);
+      gl.uniform3fv(pr.u.uSkyHorizon, OceanState.skyHorizon);
+      gl.uniform3fv(pr.u.uDeepColor, OceanState.deepColor);
+      gl.uniform3fv(pr.u.uFogColor, OceanState.fogColor);
+      gl.uniform1f(pr.u.uFogDensity, OceanState.fogDensity);
+
+      for (const b of allYachts) {
+        // 驾驶舱第一人称时隐藏玩家船体防止遮挡镜头
+        if (b.isPlayer && GameState.started && GameState.cameraMode === 1) continue;
+        drawMeshObject(b.mesh, b.modelMat, b.tint);
+      }
+
+      for (const lm of WorldManager.landmarks.values()) {
+        if (!lm) continue;
+        const mesh = lm.type === 'island' ? Meshes.island : (lm.type === 'lighthouse' ? Meshes.lighthouse : Meshes.gate);
+        drawMeshObject(mesh, lm.modelMat, WHITE_TINT);
+      }
+      gl.bindVertexArray(null);
+    }
+
+    // --- Pass 4: 开尔文 V 型泡沫尾流带 ---
+    {
+      const pr = Programs.wake;
+      gl.useProgram(pr.p);
+      gl.uniformMatrix4fv(pr.u.uViewProj, false, CameraSystem.viewProj);
+      gl.uniform1f(pr.u.uTime, OceanState.time);
+      gl.uniform3fv(pr.u.uSkyHorizon, OceanState.skyHorizon);
+
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+      for (const b of allYachts) b.wake.render();
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
+    }
+
+    // --- Pass 5: 3D 弹道水花与浪沫粒子 ---
+    SpraySystem.render(CameraSystem.viewProj, CameraSystem.pos, canvas.height);
+
+    // 6) 降频刷新 HUD 遥测与雷达 (约 15Hz，避免 DOM 抖动)
+    hudAccum += dt;
+    if (hudAccum >= 0.065) {
+      hudAccum = 0;
+      const knots = player.speed * 1.94384;
+      elSpeed.textContent = knots.toFixed(1);
+      elRpm.textContent = Math.round(player.rpm).toString();
+      elNitro.style.width = `${player.nitro.toFixed(0)}%`;
+
+      const waveH = (1.15 * WEATHER_PRESETS[OceanState.targetPreset].waveScale).toFixed(1);
+      elWave.textContent = `${waveH}m`;
+
+      // 转换航向角为航海 000°~359° 顺时针罗盘方位
+      const deg = ((Math.round((-player.yaw * 180 / Math.PI) % 360)) + 360) % 360;
+      const dirTxt = COMPASS_DIRS[Math.round(deg / 45) % 8];
+      elHeading.textContent = `HDG ${String(deg).padStart(3, '0')}° ${dirTxt}`;
+
+      if (fpsAccum >= 0.5) {
+        elFps.textContent = `${Math.round(fpsFrames / fpsAccum)} FPS`;
+        fpsFrames = 0;
+        fpsAccum = 0;
+      }
+      renderRadar();
+    }
+  }
+
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
+
